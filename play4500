@@ -128,15 +128,6 @@ def updateBoard(movingFrom, movingTo, movingPlayer, moveType):
 			setNode = nodes[movingTo]
 			setNode.setPiece(piece)
 			
-			#KYLE"S Message for Debugging (KYLE WILL DELETE)
-			sys.stderr.write("\n updateBoard: move COMPLETED: \n Player"+ 
-			movingPlayer + "'s: " + 
-			movingFrom + " is now: " + 
-			str(nodes[movingFrom].getPiece()) + "\n" + 
-			" and " + movingTo + 
-			" now contains: " + str(nodes[movingTo].getPiece()) + "\n \n")
-			#--------END MESSAGE------------
-							
 		elif moveType == "win":
 			#win operation
 			#deletes our piece by setting the movingFrom to None	
@@ -148,18 +139,8 @@ def updateBoard(movingFrom, movingTo, movingPlayer, moveType):
 			setNode = nodes[movingTo]
 			setNode.setPiece(piece)
 				
-			#TODO-Track Enemys Death
+			#TODO-Track Enemys Death Probabities
 			
-			#KYLE"S Message for Debugging (KYLE WILL DELETE)
-			sys.stderr.write("\n updateBoard: win COMPLETED: \n Player"+ 
-			movingPlayer + "'s: " + 
-			movingFrom + " is now: " + 
-			str(nodes[movingFrom].getPiece()) + "\n" + 
-			" and " + movingTo + 
-			" now contains: " + str(nodes[movingTo].getPiece()) + "\n \n")
-			#--------END MESSAGE------------
-
-
 		elif moveType == "loss":
 			#lose operation
 			#Set the movingFrom to empty, which should delete our piece
@@ -167,20 +148,9 @@ def updateBoard(movingFrom, movingTo, movingPlayer, moveType):
 			delNode = nodes[movingFrom]
 			piece = delNode.getPiece()
 			delNode.setPiece(None)
-			
-			
 
-			#TODO-Track Enemys Win 
+			#TODO-Track Enemys Win Probablities 
 			
-			#KYLE"S Message for Debugging (KYLE WILL DELETE)
-			sys.stderr.write("\n updateBoard: lose COMPLETED: \n Player"+ 
-			movingPlayer + "'s: " + 
-			movingFrom + " is now: " + 
-			str(nodes[movingFrom].getPiece()) + "\n" + 
-			" and " + movingTo + 
-			" now contains: " + str(nodes[movingTo].getPiece()) + "\n \n")
-			#--------END MESSAGE------------
-								
 		elif moveType == "tie":
 			#tie operation
 			#Set the movingFrom to empty, which should delete the piece
@@ -193,16 +163,7 @@ def updateBoard(movingFrom, movingTo, movingPlayer, moveType):
 			piece = delNode.getPiece()
 			delNode.setPiece(None)
 					
-			#TODO-Track Enemys Death
-			
-			#KYLE"S Message for Debugging (KYLE WILL DELETE)
-			sys.stderr.write("\n updateBoard: tie COMPLETED: \n Player"+ 
-			movingPlayer + "'s: " + 
-			movingFrom + " is now: " + 
-			str(nodes[movingFrom].getPiece()) + "\n" + 
-			" and " + movingTo + 
-			" now contains: " + str(nodes[movingTo].getPiece()) + "\n \n")
-			#--------END MESSAGE------------
+			#TODO-Track Enemys Death Probabities
 			
 	else:
 	
@@ -216,15 +177,6 @@ def updateBoard(movingFrom, movingTo, movingPlayer, moveType):
 			setNode = nodes[movingTo]
 			setNode.setPiece(piece)
 			
-			#KYLE"S Message for Debugging (KYLE WILL DELETE)
-			sys.stderr.write("\n updateBoard: move COMPLETED: \n Player"+ 
-			movingPlayer + "'s: " + 
-			movingFrom + " is now: " + 
-			str(nodes[movingFrom].getPiece()) + "\n" + 
-			" and " + movingTo + 
-			" now contains: " + str(nodes[movingTo].getPiece()) + "\n \n")
-			#--------END MESSAGE------------
-	
 		if moveType == "win":
 			#lose operation
 			#Set the movingTo to empty, which should delete the enemy piece 
@@ -239,15 +191,14 @@ def updateBoard(movingFrom, movingTo, movingPlayer, moveType):
 			setNode = nodes[movingTo]
 			setNode.setPiece(piece)
 			
-			#TODO-Track Enemys Win 
-
+			#TODO-Track Enemys Win Probabilities
 		if moveType == "loss":
 			#Set the movingFrom to empty, which deletes the enemy piece
 			delNode = nodes[movingFrom]
 			piece = delNode.getPiece()
 			delNode.setPiece(None)		
 
-			#TODO-Track Enemys Death
+			#TODO-Track Enemys Death Probabilities
 
 		elif moveType == "tie":
 			#tie operation
@@ -261,7 +212,7 @@ def updateBoard(movingFrom, movingTo, movingPlayer, moveType):
 			piece = delNode.getPiece()
 			delNode.setPiece(None)
 
-			#TODO-Track Enemys Death
+			#TODO-Track Enemys Death Probabilities
 
 
 #  places piece in the board
