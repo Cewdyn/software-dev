@@ -160,7 +160,7 @@ def updateBoard(movingFrom, movingTo, movingPlayer, moveType):
 			#--------END MESSAGE------------
 
 
-		elif moveType == "lose":
+		elif moveType == "loss":
 			#lose operation
 			#Set the movingFrom to empty, which should delete our piece
 			#No Need to Change the Enemy's piece as it stays in the same spot.
@@ -241,7 +241,7 @@ def updateBoard(movingFrom, movingTo, movingPlayer, moveType):
 			
 			#TODO-Track Enemys Win 
 
-		if moveType == "lose":
+		if moveType == "loss":
 			#Set the movingFrom to empty, which deletes the enemy piece
 			delNode = nodes[movingFrom]
 			piece = delNode.getPiece()
