@@ -33,6 +33,7 @@ from subprocess import PIPE, Popen
 # global variables
 nodes = {}
 ourPlayer = 0
+lastMove = ""
 
 # syntax checking function
 def syntaxChecker(arguments):
@@ -142,7 +143,7 @@ def updateBoard(movingFrom, movingTo, movingPlayer, moveType):
 			setNode.setPiece(fPiece)
 				
 			# update enemy probabilities
-			updateProbabilities(ePiece, fPiece, moveType, int(movingPlayer))
+			#updateProbabilities(ePiece, fPiece, moveType, int(movingPlayer))
 			
 		elif moveType == "loss":
 			# set the movingFrom to empty, which should delete our piece.
@@ -156,7 +157,7 @@ def updateBoard(movingFrom, movingTo, movingPlayer, moveType):
 			ePiece = setNode.getPiece()
 
 			# update enemy probabilities
-			updateProbabilities(ePiece, fPiece, moveType, int(movingPlayer))
+			#updateProbabilities(ePiece, fPiece, moveType, int(movingPlayer))
 			
 		elif moveType == "tie":
 			# set the movingFrom to empty, which should delete the piece
@@ -170,7 +171,7 @@ def updateBoard(movingFrom, movingTo, movingPlayer, moveType):
 			setNode.setPiece(None)
 					
 			# update enemy probabilities
-			updateProbabilities(ePiece, fPiece, moveType, int(movingPlayer))
+			#updateProbabilities(ePiece, fPiece, moveType, int(movingPlayer))
 			
 	else:
 	
@@ -199,7 +200,7 @@ def updateBoard(movingFrom, movingTo, movingPlayer, moveType):
 			setNode.setPiece(ePiece)
 			
 			# update enemy probabilities
-			updateProbabilities(ePiece, fPiece, moveType, int(movingPlayer))
+			#updateProbabilities(ePiece, fPiece, moveType, int(movingPlayer))
 			
 		if moveType == "loss":
 			# set the movingFrom to empty, which deletes the enemy piece
@@ -212,7 +213,7 @@ def updateBoard(movingFrom, movingTo, movingPlayer, moveType):
 			fPiece = setNode.getPiece()
 
 			# update enemy probabilities
-			updateProbabilities(ePiece, fPiece, moveType, int(movingPlayer))
+			#updateProbabilities(ePiece, fPiece, moveType, int(movingPlayer))
 			
 		elif moveType == "tie":
 			# set the movingTo to empty, which deletes the enemy piece
@@ -226,7 +227,7 @@ def updateBoard(movingFrom, movingTo, movingPlayer, moveType):
 			delNode.setPiece(None)
 
 			# update enemy probabilities
-			updateProbabilities(ePiece, fPiece, moveType, int(movingPlayer))
+			#updateProbabilities(ePiece, fPiece, moveType, int(movingPlayer))
 
 #  places piece in the board
 def injectPiece(piece, id):
@@ -569,15 +570,18 @@ def placeEnemyPieces():
 
 # calculate our next move
 def calculateMove():
+	global lastMove
 	bestMove = ""
 	piecePositions = getPiecePositions()
 	for pos in piecePositions:
-		# for now pick any valid move, (TO-DO: pick best move at a later date)
-		bestMove = getBestMove(pos)
-		
-		if (bestMove):
-			# TO-DO: move outside for statement later
-			return bestMove	
+		# for now pick the best move(based on moving forward, later change to min-max algo) 
+		move = getBestMove(pos)
+		if(move):
+			if(bestMove == "") or moveValue(move[1:3],pos) > moveValue(bestMove[1:3],bestMove[4:6]):
+				bestMove = move
+	if(bestMove != ""):					
+		lastMove = bestMove[1:3]
+		return bestMove	
 
 # get the locations of all our pieces
 def getPiecePositions():
@@ -597,7 +601,7 @@ def getPiecePositions():
 # grabs the best move for a given piece
 # (for now just grabs the first valid move)		
 def getBestMove(pos):
-	
+	bestMove = ""
 	node = nodes[pos]
 	
 	piece = node.getPiece()
@@ -605,23 +609,41 @@ def getBestMove(pos):
 		for connection in node.getConnections():
 			move = connection.getConnectedId()
 			
-			if isMoveValid(move):
-				return "(" + pos + " " + move + ")"
+			if isMoveValid(move,pos):
+				if bestMove == "" or moveValue(move,pos) > moveValue(bestMove,pos):
+					bestMove = move
+	if(bestMove != ""):					
+		return "(" + pos + " " + bestMove + ")"
 
 # determine if a move is valid (for now means we arn't moving onto 
-# a space occupied by our own piece)
-def isMoveValid(move):
-
+# a space occupied by our own piece), and its a move forward, and we aren't attacking a camp.
+def isMoveValid(move, currentPos):
 	if nodes[move].getPiece():
 		# check if piece is friendly or enemy
 		if isinstance(nodes[move].getPiece(),FPiece):
+			return False
+		#check that we aren't trying to attack piece on a camp
+		elif isinstance(nodes[move].getPiece(),EPiece) and (nodes[move].getType() == "camp"):
 			return False
 		else:
 			return True
 	
 	else:
 		return True
-		
+	
+# Determines move value based on moving forward and if we are attacking an enemy piece.	
+def moveValue(move, pos):
+	global lastMove
+	value = 1
+	if int(move[1]) > int(pos[1]):
+		value += int(pos[1])
+	else:
+		value = 0
+	if nodes[move].getPiece():
+		value += 1
+	if move == lastMove:
+		value = 0
+	return value
 		        
 def main():
 	
