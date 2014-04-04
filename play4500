@@ -192,7 +192,7 @@ def updateBoard(movingFrom, movingTo, movingPlayer, moveType):
 			setNode.setPiece(piece)
 			
 			#TODO-Track Enemys Win Probabilities
-		if moveType == "loss":
+		if moveType == "	":
 			#Set the movingFrom to empty, which deletes the enemy piece
 			delNode = nodes[movingFrom]
 			piece = delNode.getPiece()
@@ -536,7 +536,7 @@ class Connection:
 		self.type = typ
 
 	def __str__(self):
-		return "Connection(To:" + str(self.connectedId) + 
+		return "Connection(To:" + str(self.connectedId) + \
 			" Type:" + self.typ + ") "
 
 #Put the enemy pieces on the board
