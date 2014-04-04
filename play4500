@@ -141,6 +141,7 @@ def updateBoard(movingFrom, movingTo, movingPlayer, moveType):
 				
 			#TODO-Track Enemys Death Probabities
 			
+			
 		elif moveType == "loss":
 			#lose operation
 			#Set the movingFrom to empty, which should delete our piece
@@ -192,7 +193,7 @@ def updateBoard(movingFrom, movingTo, movingPlayer, moveType):
 			setNode.setPiece(piece)
 			
 			#TODO-Track Enemys Win Probabilities
-		if moveType == "	":
+		if moveType == "loss":
 			#Set the movingFrom to empty, which deletes the enemy piece
 			delNode = nodes[movingFrom]
 			piece = delNode.getPiece()
@@ -463,6 +464,8 @@ def probOfWinning(playerPiece, enemyPiece):
 
 # update probabilities TO-DO
 def updateProbabilities(enemyPiece, playerPiece, moveOutcome):
+
+	# TO-DO: KNOW IF AN ENGINEER BECAUSE MOVES MORE THAN ONE BOARD SPACE
 	
 	enemyPieceID = enemyPiece # REPLACE WITH: enemyPiece.getId
 	playerPieceID = 1 # REPLACE WITH: playerPiece.getId
