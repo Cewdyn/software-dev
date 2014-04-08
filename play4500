@@ -191,6 +191,40 @@ class Connection:
 		return "Connection(To:" + str(self.connectedId) + \
 			" Type:" + self.typ + ") "
 
+
+
+## Denotes a possible move outcome. Includes an outcome rankset, board and
+## the probability of this outcome.
+class Outcome:
+	def __init__(self, board, rankSet, probability, hqExplored):
+		self.board = board
+		self.rankSet = rankSet
+		self.probability = probability
+
+	def getBoard(self):
+		return self.board
+
+	def setBoard(self, board):
+		self.board = board
+
+	def getRankSet(self):
+		return self.rankSet
+
+	def setRankSEt(self, rankSet):
+		self.rankSet = rankSet
+
+	def getProbability(self):
+		return self.probability
+
+	def setProbability(self, probability):
+		self.probability = probability
+
+	def getHQExplored(self):
+		return self.hqExplored
+
+	def setHQExplored(self, hqExplored):
+		self.hqExplored = hqExplored
+
 ##############################################################
 #### Functions ##############################################
 ##############################################################
@@ -200,17 +234,17 @@ class Connection:
 
 #Main minmax algorithm. This function will go to depth levels down a decision tree
 # computing which move tree provides the best outcome
-def minmax(board, depth, maxing, alpha, beta):
+def minmax(board, rankProbs, hqExplored, depth, maxing, alpha, beta):
 
-	if (depth == 0 or isLeaf(board)):
+	if (depth == 0 or isLeaf(board, hqExplored)):
 		
-		return scoreBoard(board)
+		return scoreBoard(board, rankProbs, hqExplored)
 		
 	scores = []
 	
-	for move in getPossibleMoves(board, maxing):
+	for move in getPossibleMoves(board, maxing, rankProbs, hqExplored):
 		
-		score = minmax(move[1], depth - 1, not maxing, alpha, beta)
+		score = minmax(move.getBoard(), move.getRankProbs(), move.getHQExplored(), depth - 1, not maxing, alpha, beta)
 		scores.append(score)
 		if(not maxing):
 			if (beta > score):
@@ -233,11 +267,193 @@ def minmax(board, depth, maxing, alpha, beta):
 	else:
 		return beta
 
+# Given a board's state, it will return true if there are no more moves left
+# or if the game has finished.
+def isLeaf(board, hqExplored):
+
+	if hqExplored and instanceOf(board{"D12"}.getPiece, FPiece):
+		return True
+	elif instanceOf(board{"B1"}.getPiece, EPiece):
+		return True
+
+	existsFriendly = False
+	existsEnemy = False
+
+	for node in board:
+		if not existsFriendly and instanceOf(node.getPiece(), FPiece):
+			existsFriendly = True
+
+		if not existsEnemy and instanceOf(node.getPiece(), EPiece):
+			existsEnemy = True
+
+		if existsFriendly and existsEnemy:
+			break
+
+	if not existsFriendly or not existsEnemy:
+		return True
+
+	return False
+
+# Given a board state, it will return an array of all possible moves for
+# either the AI or the enemy
+def getPossibleMoves(board, rankProbs, isAI, hqExplored):
+
+	moves = []
+
+	for node in board:
+
+		piece = node.getPiece()
+
+		if piece is not None:
+			if isAI and instanceOf(piece, FPiece): 
+				moves.extend(getPiecePossibleMoves(node, board, rankProbs, isAI, hqExplored))
+			elif not isAI and instanceOf(piece, EPiece):
+				moves.extend(getPiecePossibleMoves(node, board, rankProbs, isAI, hqExplored))
+
+	return moves
+
+
+# Given an Piece, it will determine all the possible moves it can make,
+# including all possible outcomes of the move, the probability of each and
+# the updated rankset
+def getPiecePossibleMoves(node, board, rankProbs, isAI, hqExplored):
+
+	##TO-DO: Find out if modifying the board in this function modifies a new
+	## copy of it, or modifies it in place.
+
+	piece = node.getPiece()
+
+	outcomes = []
+
+	for connection in node.getConnections:
+
+		newBoard = board
+
+		moveToNode = newBoard{connection.getConnectedId()}
+		moveFromNode = newBoard{node.getId()}
+		moveToPiece = moveToNode.getPiece()
+
+		if moveToNode.getType() == "Camp" and moveToPiece is not None:
+			continue
+		elif instanceOf(moveToPiece, FPiece) and isAI:
+			continue
+		elif instanceOf(moveToPiece, EPiece) and not isAI:
+			continue
+
+		elif moveToPiece is None:
+
+			newBoard{moveToNode.getId()} = moveToNode.setPiece(piece)
+			newBoard{moveFromNode.getId()} = moveFromNode.setPiece(None)
+
+			if not hqExplored and moveToNode.getId() == "B12":
+				hqExplored = True
+
+			outcomes.append(Outcome(newBoard, rankProbs, 1, hqExplored))
+
+		elif moveToPiece is not None:
+
+			outcomes.extend(getPossibleOutcomes(newBoard, moveFromNode, moveToNode, rankProbs, isAI, hqExplored))
+
+
+
+## Given a board, a node to move from and a node to move to, finds the possible
+# outcomes
+def getPossibleOutcomes(board, moveFromNode, moveToNode, rankProbs, isAI, hqExplored):
+
+	outcomes = []
+
+	probOfWinning = probOfWinning(moveFromNode.getPiece(), moveToNode.getPiece(), rankProbs)
+	probOfTie = probOfTie(moveFromNode.getPiece(), moveToNode.getPiece(), rankProbs)
+	probOfLosing = probOfLosing(moveFromNode.getPiece(), moveToNode.getPiece(), rankProbs)
+
+	if probOfWinning > 0:
+
+		winBoard = board
+		winToNode = moveToNode
+		winFromNode = moveFromNode
+		winProbs = rankProbs
+		winToNode.setPiece(moveFromNode.getPiece)
+		winFromNode.setPiece(None)
+
+		winBoard{winToNode.getId()} = winToNode
+		winBoard{winFromNode.getId()} = winFromNode
+
+
+
+		##HANDLE UPDATING RANKSETS
+		if isAI:
+			updateProbabilities(moveFromNode.getPiece(), moveToNode.getPiece(), "win", ourPlayer, winProbs)
+		else:
+			if ourPlayer == 1:
+				player = 2
+			else:
+				player = 1
+
+			updateProbabilities(moveFromNode.getPiece(), moveToNode.getPiece(), "win", player, winProbs)
+
+		if not hqExplored and winToNode.getId() == "B12"
+			hqEplored = True
+
+		outcomes.append(Outcome(winBoard, winProbs, probOfWinning, hqExplored))
+
+	if probOfTie > 0:
+
+		tieProbs = rankProbs
+		tieBoard = board
+		tieToNode = moveToNode
+		tieFromNode = moveFromNode
+		tieToNode.setPiece(None)
+		tieFromNode.setPiece(None)
+
+		tieBoard{tieToNode.getId()} = tieToNode
+		tieBoard{tieFromNode.getId()} = tieFromNode
+
+		##HANDLE UPDATING RANKSETS
+		if isAI:
+			updateProbabilities(moveFromNode.getPiece(), moveToNode.getPiece(), "tie", ourPlayer, tieProbs)
+		else:
+			if ourPlayer == 1:
+				player = 2
+			else:
+				player = 1
+
+			updateProbabilities(moveFromNode.getPiece(), moveToNode.getPiece(), "tie", player, tieProbs)
+
+
+
+		outcomes.append(Outcome(tieBoard, tieProbs, probOfTie, hqExplored))
+
+	if probOfLosing > 0:
+
+		loseBoard = board
+		loseProbs = rankProbs
+		loseFromNode = moveFromNode
+		loseFromNode.setPiece(None)
+
+		loseBoard{loseToNode.getId()} = loseToNode
+		loseBoard{loseFromNode.getId()} = loseFromNode
+
+		##HANDLE UPDATING RANKSETS
+		if isAI:
+			updateProbabilities(moveFromNode.getPiece(), moveToNode.getPiece(), "lose", ourPlayer, loseProbs)
+		else:
+			if ourPlayer == 1:
+				player = 2
+			else:
+				player = 1
+
+			updateProbabilities(moveFromNode.getPiece(), moveToNode.getPiece(), "lose", player, loseProbs)
+
+
+		outcomes.append(Outcome(loseBoard, loseProbs, probOfLose, hqExplored))
+
+
+	return outcomes
 
 
 # Analyzes a board configuration and returns a point value in terms of
 # the strength of the AI's position
-def scoreBoard(board)
+def scoreBoard(board, rankProbs, hqExplored)
 	
 	score = 0
 
@@ -247,35 +463,39 @@ def scoreBoard(board)
 		if isInstance(piece, FPiece):
 			score = score + (100 * getTypeValue(piece.getType()))
 		elif isInstance(piece, EPiece):
-			score = score + getEPieceScore(piece)
+			score = score + getEPieceScore(piece, rankProbs)
 
-	dist = getDistanceToFlag(board)
+	dist = getDistanceToFlag(board, False, hqExplored)
+	enemyDist = getDistanceToFlag(board, True, False)
 
 	score = score - (dist * 900)
+	score = score + (enemyDist * 450)
 
 	return score
 
 # Gets the heuristic score for an EPiece. This is difficult because it has to
 # take into account the probabilities of the piece's type.
-def getEPieceScore(piece):
+def getEPieceScore(piece, rankProbs):
 
 	score = 0
 
 	for i in xrange(2, 9):
 		score = score + (probOfType(piece, str(i)) * (i * 100))
 
-	score = score + (probOfType(piece, "1") * 200)
-	score = score + (probOfType(piece, "L") * 300)
-	score = score + (probOfType(piece, "B") * 400)
+	score = score + (probOfType(piece, "1", rankProbs) * 200)
+	score = score + (probOfType(piece, "L", rankProbs) * 300)
+	score = score + (probOfType(piece, "B", rankProbs) * 400)
 
 	return -1 * score
 
 
 ## Finds the distance from the closest Friendly peice on the board to the 
 # an enemy's unexplored castle
-def getDistanceToFlag(board):
+def getDistanceToFlag(board, isEnemy, hqExplored):
 	
-	if (hq1Explored):
+	if isEnemy:
+		goal = "B1"
+	elif (hq1Explored):
 		goal = "B12"
 	else: 
 		goal = "D12"
@@ -283,10 +503,15 @@ def getDistanceToFlag(board):
 	result = 100
 
 	for node in board:
-		if isInstance(node.getPiece(), FPiece):
-			dist = aStarDistance(node.getId(), goal)
+		if not isEnemy and isInstance(node.getPiece(), FPiece):
+			dist = getDistance(node.getId(), goal)
 			if dist < result:
 				result = dist
+		elif isEnemy and isInstance(node.getPiece(), EPiece):
+			dist = getDistance(node.getId(), goal)
+			if dist < result:
+				result = dist
+
 
 	return result
 
@@ -295,16 +520,16 @@ def getDistanceToFlag(board):
 def getDistance(start, end):
 
 	if len(start) > 2:
-		sy = int(start[-2:])
+		sy = float(start[-2:])
 	else:
-		sy = int(start[1])
+		sy = float(start[1])
 
 	sx = getIntVal(start[0])
 	
 	if len(end) > 2:
-		ey = int(end[-2:])
+		ey = float(end[-2:])
 	else:
-		ey = int(end[1])
+		ey = float(end[1])
 
 	ex = getIntVal(end[0])
 
@@ -317,15 +542,15 @@ def getDistance(start, end):
 def getIntVal(xStr):
 
 	if xStr == "A":
-		return 1
+		return 1.0
 	elif xStr == "B":
-		return 2
+		return 2.0
 	elif xStr == "C":
-		return 3
+		return 3.0
 	elif xStr == "D":
-		return 4
+		return 4.0
 	else:
-		return 5
+		return 5.0
 
 # syntax checking function
 def syntaxChecker(arguments):
@@ -581,9 +806,9 @@ def createRankSets():
 
 # Given a piece and a type, calculates the probability that the piece is
 # that type
-def probOfType(piece, type):
+def probOfType(piece, type, rankProbs):
 
-	for key, set in rankSets.iterItems:
+	for key, set in rankProbs.iterItems:
 		if key == type:
 			if piece.getId() in set.getPossiblePieces():
 				typeNumer = set.getAmount()
@@ -659,7 +884,7 @@ def probOfWinning(playerPiece, enemyPiece):
  	return finalProbability
 
 # update probabilities TO-DO
-def updateProbabilities(enemyPiece, playerPiece, moveOutcome, movingPlayer):
+def updateProbabilities(enemyPiece, playerPiece, moveOutcome, movingPlayer, rankProbs):
 
 	# TO-DO: KNOW IF AN ENGINEER BECAUSE MOVES MORE THAN ONE BOARD SPACE
 	
@@ -687,7 +912,7 @@ def updateProbabilities(enemyPiece, playerPiece, moveOutcome, movingPlayer):
 	
 	if moveOutcome == "tie":
 		# if tie, enemy piece is either of same rank or a bomb or landmine
-		for key, set in rankSets.iteritems():
+		for key, set in rankProbs.iteritems():
 			if key != "L" and key != "B" and key != playerPieceType:
 		 		set.removePossiblePiece(enemyPiece)
 	# TO-DO: needs to account for engineers vs landmines
@@ -696,7 +921,7 @@ def updateProbabilities(enemyPiece, playerPiece, moveOutcome, movingPlayer):
 		# remove enemy from all ranks higher than our rank and remove
 		# L/B/F possibility
 		i = 0
-		for key, set in iter(sorted(rankSets.iteritems())):
+		for key, set in iter(sorted(rankProbs.iteritems())):
 			if i >= playerPieceTypeInt:
 				set.removePossiblePiece(enemyPiece)
 			i += 1
@@ -705,7 +930,7 @@ def updateProbabilities(enemyPiece, playerPiece, moveOutcome, movingPlayer):
 		# remove enemy from all ranks below our rank and remove 
 		# L/B/F possibility
 		i = 0
-		for key, set in iter(sorted(rankSets.iteritems())):
+		for key, set in iter(sorted(rankProbs.iteritems())):
 			if i <= playerPieceTypeInt:
 				set.removePossiblePiece(enemyPiece)
 			elif i > 8:
