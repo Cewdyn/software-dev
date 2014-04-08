@@ -32,12 +32,20 @@ from subprocess import PIPE, Popen
 
 
 ##############################################################
+#### Global Constants #######################################
+##############################################################
+
+ALGORITHM_DEPTH = 9
+
+
+##############################################################
 #### Global Variables #######################################
 ##############################################################
 
 nodes = {}
 ourPlayer = 0
 lastMove = ""
+firstHQExplored = False
 
 
 
@@ -196,10 +204,11 @@ class Connection:
 ## Denotes a possible move outcome. Includes an outcome rankset, board and
 ## the probability of this outcome.
 class Outcome:
-	def __init__(self, board, rankSet, probability, hqExplored):
+	def __init__(self, board, rankSet, probability, hqExplored, moveFrom, moveTo):
 		self.board = board
 		self.rankSet = rankSet
 		self.probability = probability
+		self.move = move
 
 	def getBoard(self):
 		return self.board
@@ -225,12 +234,38 @@ class Outcome:
 	def setHQExplored(self, hqExplored):
 		self.hqExplored = hqExplored
 
+	def getMoveFrom(self):
+		return self.moveFrom
+		
+	def setMoveFrom(self, moveFrom):
+		self.moveFrom = moveFrom
+
+	def getMoveTo(self):
+		return self.moveTo
+		
+	def setMoveTo(self, moveTo):
+		self.moveTo = moveTo
+
 ##############################################################
 #### Functions ##############################################
 ##############################################################
 
 
-
+## Finds the next best move, using minmax
+def getNextMove():
+	
+	bestScore = -1000000000000000
+	
+	
+	for move in getPossibleMoves(nodes, isAI, rankSets, firstHQExplored):
+		
+		score = minmax(nodes, rankSets, firstHQExplored, ALGORITHM_DEPTH, -1000000000, 1000000000)
+		
+		if bestScore < score:
+			bestScore = score
+			bestMove = move.getMove()
+		
+	return bestMove
 
 #Main minmax algorithm. This function will go to depth levels down a decision tree
 # computing which move tree provides the best outcome
@@ -243,9 +278,22 @@ def minmax(board, rankProbs, hqExplored, depth, maxing, alpha, beta):
 	scores = []
 	
 	for move in getPossibleMoves(board, maxing, rankProbs, hqExplored):
+		if instanceOf(move, Battle):
+			
+			winScore = minmax(move.getWinOutcome().getBoard(), move.getWinOutcome().getRankProbs(), move.getWinOutcome().getHQExplored(), depth - 1, not maxing, alpha, beta)
+			
+			tieScore = minmax(move.getTieOutcome().getBoard(), move.getTieOutcome().getRankProbs(), move.getTieOutcome().getHQExplored(), depth - 1, not maxing, alpha, beta)
+			
+			lossScore = minmax(move.getLossOutcome().getBoard(), move.getLossOutcome().getRankProbs(), move.getLossOutcome().getHQExplored(), depth - 1, not maxing, alpha, beta)
+			
+			score = ((winScore * move.getWinProb()) + (tieScore * move.getTieProb()) + (lossScore * move.getLossProb()))
 		
-		score = minmax(move.getBoard(), move.getRankProbs(), move.getHQExplored(), depth - 1, not maxing, alpha, beta)
+		else:
+		
+			score = minmax(move.getBoard(), move.getRankProbs(), move.getHQExplored(), depth - 1, not maxing, alpha, beta)
+		
 		scores.append(score)
+		
 		if(not maxing):
 			if (beta > score):
 				
@@ -348,7 +396,7 @@ def getPiecePossibleMoves(node, board, rankProbs, isAI, hqExplored):
 			if not hqExplored and moveToNode.getId() == "B12":
 				hqExplored = True
 
-			outcomes.append(Outcome(newBoard, rankProbs, 1, hqExplored))
+			outcomes.append(Outcome(newBoard, rankProbs, 1, hqExplored, moveFromNode.getId(), moveToNode.getId()))
 
 		elif moveToPiece is not None:
 
@@ -378,8 +426,6 @@ def getPossibleOutcomes(board, moveFromNode, moveToNode, rankProbs, isAI, hqExpl
 		winBoard{winToNode.getId()} = winToNode
 		winBoard{winFromNode.getId()} = winFromNode
 
-
-
 		##HANDLE UPDATING RANKSETS
 		if isAI:
 			updateProbabilities(moveFromNode.getPiece(), moveToNode.getPiece(), "win", ourPlayer, winProbs)
@@ -394,7 +440,7 @@ def getPossibleOutcomes(board, moveFromNode, moveToNode, rankProbs, isAI, hqExpl
 		if not hqExplored and winToNode.getId() == "B12"
 			hqEplored = True
 
-		outcomes.append(Outcome(winBoard, winProbs, probOfWinning, hqExplored))
+		outcomes.append(Outcome(winBoard, winProbs, probOfWinning, hqExplored, moveFromNode.getId(), moveToNode.getId()))
 
 	if probOfTie > 0:
 
@@ -421,7 +467,7 @@ def getPossibleOutcomes(board, moveFromNode, moveToNode, rankProbs, isAI, hqExpl
 
 
 
-		outcomes.append(Outcome(tieBoard, tieProbs, probOfTie, hqExplored))
+		outcomes.append(Outcome(tieBoard, tieProbs, probOfTie, hqExplored, moveFromNode.getId(), moveToNode.getId()))
 
 	if probOfLosing > 0:
 
@@ -435,17 +481,17 @@ def getPossibleOutcomes(board, moveFromNode, moveToNode, rankProbs, isAI, hqExpl
 
 		##HANDLE UPDATING RANKSETS
 		if isAI:
-			updateProbabilities(moveFromNode.getPiece(), moveToNode.getPiece(), "lose", ourPlayer, loseProbs)
+			updateProbabilities(moveFromNode.getPiece(), moveToNode.getPiece(), "loss", ourPlayer, loseProbs)
 		else:
 			if ourPlayer == 1:
 				player = 2
 			else:
 				player = 1
 
-			updateProbabilities(moveFromNode.getPiece(), moveToNode.getPiece(), "lose", player, loseProbs)
+			updateProbabilities(moveFromNode.getPiece(), moveToNode.getPiece(), "loss", player, loseProbs)
 
 
-		outcomes.append(Outcome(loseBoard, loseProbs, probOfLose, hqExplored))
+		outcomes.append(Outcome(loseBoard, loseProbs, probOfLose, hqExplored, moveFromNode.getId(), moveToNode.getId()))
 
 
 	return outcomes
