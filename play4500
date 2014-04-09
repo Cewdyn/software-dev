@@ -456,35 +456,57 @@ def getPiecePossibleMoves(node, board, rankProbs, isAI, hqExplored):
 	for connection in node.getConnections():
 
 		newBoard = board
-
 		moveToNode = newBoard[connection.getConnectedId()]
 		moveFromNode = newBoard[node.getId()]
-		moveToPiece = moveToNode.getPiece()
 
-		if moveToNode.getType() == "camp" and moveToPiece is not None:
-			continue
-		elif isinstance(moveToPiece, FPiece) and isAI:
-			continue
-		elif isinstance(moveToPiece, EPiece) and not isAI:
-			continue
-
-		elif moveToPiece is None:
-			sys.stderr.write("MoveFromNodeId is: " + moveFromNode.getId() + "\n")
-			newBoard[moveToNode.getId()] = moveToNode.setPiece(piece)
-			newBoard[moveFromNode.getId()] = moveFromNode.setPiece(None)
-
-			if not hqExplored and moveToNode.getId() == "B12":
-				hqExplored = True
-
-			outcomes.append(Outcome(newBoard, rankProbs, 1, hqExplored, moveFromNode.getId(), moveToNode.getId()))
-
-		elif moveToPiece is not None:
-
-			outcomes.append(getPossibleOutcomes(newBoard, moveFromNode, moveToNode, rankProbs, isAI, hqExplored))
+		outcomes = connectionOutcomes(connection, newBoard, moveToNode, moveFromNode, rankProbs, isAI, hqExplored, outcomes)
 
 	return outcomes
 
 
+def connectionOutcomes(connection, board, moveToNode, moveFromNode, rankProbs, isAI, hqExplored, outcomes):
+	moveToPiece = moveToNode.getPiece()
+	newBoard = board
+
+	if moveToNode.getType() == "camp" and moveToPiece is not None:
+		return outcomes
+	elif isinstance(moveToPiece, FPiece) and isAI:
+		return outcomes
+	elif isinstance(moveToPiece, EPiece) and not isAI:
+		return outcomes
+
+	elif moveToPiece is None:
+		sys.stderr.write("MoveFromNodeId is: " + moveFromNode.getId() + "\n")
+		newBoard[moveToNode.getId()] = moveToNode.setPiece(piece)
+		newBoard[moveFromNode.getId()] = moveFromNode.setPiece(None)
+
+		if not hqExplored and moveToNode.getId() == "B12":
+			hqExplored = True
+
+		outcomes.append(Outcome(newBoard, rankProbs, 1, hqExplored, moveFromNode.getId(), moveToNode.getId()))
+
+		if connection.getType() == "rail":
+			newConnection = getRailConnection(moveToNode, moveFromNode) 
+			if(newConnection):
+				outcomes = connectionOutcomes(newConnection, board, board[newConnection.getConnectedId()], moveFromNode, rankProbs, isAI, hqExplored, outcomes)
+
+		return outcomes
+
+	elif moveToPiece is not None:
+
+		return outcomes.append(getPossibleOutcomes(newBoard, moveFromNode, moveToNode, rankProbs, isAI, hqExplored))
+
+def getRailConnection(moveToNode, moveFromNode):
+
+	for connection in moveToNode.getConnections():
+		newMoveTo = connection.getConnectedId()
+		if(connection.getType() == "rail" and
+			newMoveTo != moveFromNode.getId() and
+			(newMoveTo[0] == moveFromNode.GetId()[0] or
+			newMoveTo[1] == moveFromNode.GetId[1])):
+			return connection
+			
+				
 ## Given a board, a node to move from and a node to move to, finds the possible
 # outcomes
 def getPossibleOutcomes(board, moveFromNode, moveToNode, rankProbs, isAI, hqExplored):
