@@ -294,6 +294,7 @@ class Battle:
 #### Functions ##############################################
 ##############################################################
 
+''' COMMENTED OUT YOUR CODE BECAUSE IT HAS SYNTAX BUGS Q.Q
 
 
 ## Finds the next best move, using minmax
@@ -689,6 +690,7 @@ def getIntVal(xStr):
 		return 4.0
 	else:
 		return 5.0
+'''
 
 # syntax checking function
 def syntaxChecker(arguments):
@@ -964,9 +966,9 @@ def probOfType(piece, type, rankProbs):
 # takes instances of EPiece and FPiece class
 def probOfWinning(playerPiece, enemyPiece):
 
-	enemyPieceID = enemyPiece # REPLACE WITH: enemyPiece.getId
-	playerPieceID = 1 # REPLACE WITH: playerPiece.getId
-	playerPieceType = playerPiece # REPLACE WITH: playerPiece.getType
+	enemyPieceID = enemyPiece.getId
+	playerPieceID = playerPiece.getId
+	playerPieceType = playerPiece.getType
 	
 	# convert rank types to integers for easier looping (INDEXED AT 0)
 	if playerPieceType == "B":
@@ -978,16 +980,17 @@ def probOfWinning(playerPiece, enemyPiece):
 	else:
 		playerPieceTypeInt = int(playerPieceType) - 1 
 	
+	# TO-DO: getDefinitePieces is not currently in use
 	# check if this enemy piece's rank has already been discovered
- 	for key, set in iter(sorted(rankSets.iteritems())):
- 		if enemyPieceID in set.getDefinitePieces():
- 			return 1
- 			
- 	# TO-DO: in future code, ignore flag! (we wont lose against a flag)
+ 	# for key, set in iter(sorted(rankSets.iteritems())):
+ 	# 	if enemyPieceID in set.getDefinitePieces():
+ 	# 		# TO-DO: needs to check if the rank is lower than ours
+ 	# 		return 1
  	
- 	# rudimentary probability system. this will be significantly enhanced
- 	# before final submission
+	# probability of losing
  	probabilityAgainstWeighted = 0
+ 	
+ 	# probability of winning
  	probabilityForWeighted = 0
  	
  	# currently unused, but may be useful for future probability metrics
@@ -1002,26 +1005,71 @@ def probOfWinning(playerPiece, enemyPiece):
 	 			rankProbability = float(set.getAmount()) / len(set.getPossiblePieces())
 	 			probabilityForWeighted += rankProbability
 	 			probabilityForCount += 1
-	 	# ranks we will lose to
+	 	# ranks we will lose or tie to 
 	 	else:
 	 		if enemyPieceID in set.getPossiblePieces():
-	 			rankProbability = float(set.getAmount()) / len(set.getPossiblePieces())
-	 			probabilityAgainstWeighted += rankProbability
-	 			probabilityAgainstCount += 1
+	 			# don't consider flags in the list of pieces that could defeat us
+	 			if i != 10:
+	 				rankProbability = float(set.getAmount()) / len(set.getPossiblePieces())
+	 				probabilityAgainstWeighted += rankProbability
+	 				probabilityAgainstCount += 1
 	 	i += 1
-
-#		For debugging, delete me when done
-# 	sys.stderr.write("  For -- Count: " + str(probabilityForCount) + 
-# 						", Weighted: " + str(probabilityForWeighted) + "\n")
-# 	sys.stderr.write("  Against -- Count: " + str(probabilityAgainstCount) + 
-# 						", Weighted "+ str(probabilityAgainstWeighted) + "\n")
 	
+	# get the total amount of weight
 	totalProbabilityWeight = probabilityForWeighted + probabilityAgainstWeighted
-	
+
+	# the prob of winning is the favorable probability divided by total weight 
 	finalProbability = probabilityForWeighted / totalProbabilityWeight
 	
  	return finalProbability
 
+# get the probability of losing
+def probOfLosing(playerPiece, enemyPiece):
+	
+	return 1 - probOfWinning(playerPiece, enemyPiece)
+	
+# get the probability of tieing
+def probOfTieing(playerPiece, enemyPiece):
+
+	enemyPieceID = enemyPiece.getId
+	playerPieceID = playerPiece.getId
+	playerPieceType = playerPiece.getType
+	
+	# convert rank types to integers for easier looping (INDEXED AT 0)
+	if playerPieceType == "B":
+		playerPieceTypeInt = 9
+	elif playerPieceType == "F":
+		playerPieceTypeInt = 10
+	elif playerPieceType == "L":
+		playerPieceTypeInt = 11
+	else:
+		playerPieceTypeInt = int(playerPieceType) - 1 
+		
+	probabilityTieWeighted = 0
+	probabilityNotTieWeighted = 0
+	
+	i = 0
+	for key, set in iter(sorted(rankSets.iteritems())):
+		# an engineer wont tie a landmine
+		if playerPieceTypeInt == 1 and i == 11:
+			rankProbability = float(set.getAmount()) / len(set.getPossiblePieces())
+			probabilityNotTieWeighted += rankProbability
+		# ranks that can tie are the same rank, a bomb or landmine 
+		elif i == playerPieceTypeInt or i == 9 or i == 11:
+			rankProbability = float(set.getAmount()) / len(set.getPossiblePieces())
+			probabilityTieWeighted += rankProbability
+		else:
+			rankProbability = float(set.getAmount()) / len(set.getPossiblePieces())
+			probabilityNotTieWeighted += rankProbability
+	
+	# get the total probability weight
+	totalProbabilityWeight = probabilityTieWeighted + probabilityNotTieWeighted
+	
+	# the prob of tieing is the prob of a tie divided by total weight
+	finalProbability = probabilityTieWeighted / totalProbabilityWeight
+	
+	return finalProbability
+			
 # update probabilities TO-DO
 def updateProbabilities(enemyPiece, playerPiece, moveOutcome, movingPlayer, rankProbs):
 
@@ -1054,17 +1102,18 @@ def updateProbabilities(enemyPiece, playerPiece, moveOutcome, movingPlayer, rank
 		for key, set in rankProbs.iteritems():
 			if key != "L" and key != "B" and key != playerPieceType:
 		 		set.removePossiblePiece(enemyPiece)
-	# TO-DO: needs to account for engineers vs landmines
-	# TO-DO: needs to ignore Flags
 	elif moveOutcome == "win":
 		# remove enemy from all ranks higher than our rank and remove
 		# L/B/F possibility
 		i = 0
 		for key, set in iter(sorted(rankProbs.iteritems())):
 			if i >= playerPieceTypeInt:
-				set.removePossiblePiece(enemyPiece)
+				# if our piece is an engineer, do not remove possibility enemy was an L
+				if playPieceTypeInt == 1 and i == 11:
+					pass
+				else:
+					set.removePossiblePiece(enemyPiece)
 			i += 1
-	# TO-DO: needs to ignore Flags
 	elif moveOutcome == "loss":
 		# remove enemy from all ranks below our rank and remove 
 		# L/B/F possibility
