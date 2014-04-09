@@ -84,7 +84,8 @@ class Node:
 		
 	def setConnections(self, connections):
 		self.connections = connections
-		
+	
+	'''	
 	def __repr__(self):
 		results = "Node(Id:" + str(self.id) + " Type:" + self.type + " Piece:"
 		+ str(self.piece) #+ " Connections:["
@@ -106,7 +107,8 @@ class Node:
 		results += "])"
 		
 		return results	
-		
+		'''
+
 class FPiece:
 	def __init__(self, id, type):
 		self.id = id
@@ -208,7 +210,8 @@ class Outcome:
 		self.board = board
 		self.rankSet = rankSet
 		self.probability = probability
-		self.move = move
+		self.moveFrom = moveFrom
+		self.moveTo = moveTo
 
 	def getBoard(self):
 		return self.board
@@ -246,9 +249,51 @@ class Outcome:
 	def setMoveTo(self, moveTo):
 		self.moveTo = moveTo
 
+## Contains the all the outcomes and probabilities of a battle. Used
+# by the algorithm to predict board scores from battle movements
+
+class Battle:
+
+	def getWinOutcome(self):
+		return self.winOutcome
+
+	def setWinOutcome(self, winOutcome):
+		self.winOutcome = winOutcome
+
+	def getWinProb(self):
+		return self.winProb
+
+	def setWinProb(self, winProb):
+		self.winProb = winProb
+
+	def getTieOutcome(self):
+		return self.TieOutcome
+
+	def setTieOutcome(self, tieOutcome):
+		self.tieOutcome = tieOutcome
+
+	def getTieProb(self):
+		return self.tieProb
+
+	def setTieProb(self, tieProb):
+		self.tieProb = tieProb
+
+	def getLossOutcome(self):
+		return self.lossOutcome
+
+	def setLossOutcome(self, lossOutcome):
+		self.lossOutcome = lossOutcome
+
+	def getLossProb(self):
+		return self.lossProb
+
+	def setLossProb(self, lossProb):
+		self.lossProb = lossProb
+
 ##############################################################
 #### Functions ##############################################
 ##############################################################
+
 
 
 ## Finds the next best move, using minmax
@@ -257,15 +302,41 @@ def getNextMove():
 	bestScore = -1000000000000000
 	
 	
-	for move in getPossibleMoves(nodes, isAI, rankSets, firstHQExplored):
+	for move in getPossibleMoves(nodes, rankSets, True, firstHQExplored):
 		
-		score = minmax(nodes, rankSets, firstHQExplored, ALGORITHM_DEPTH, -1000000000, 1000000000)
-		
+		if isinstance(move, Battle):
+			
+			if (move.getWinProb() > 0):
+				winScore = minmax(move.getWinOutcome().getBoard(), move.getWinOutcome().getRankProbs(), move.getWinOutcome().getHQExplored(), depth - 1, not maxing, alpha, beta)
+			else:
+				winScore = 0
+
+			if (move.getTieProb() > 0):
+				tieScore = minmax(move.getTieOutcome().getBoard(), move.getTieOutcome().getRankProbs(), move.getTieOutcome().getHQExplored(), depth - 1, not maxing, alpha, beta)
+			else:
+				tieScore = 0
+
+			if (move.getLossProb() > 0):
+				lossScore = minmax(move.getLossOutcome().getBoard(), move.getLossOutcome().getRankProbs(), move.getLossOutcome().getHQExplored(), depth - 1, not maxing, alpha, beta)
+			else:
+				lossScore = 0
+
+			score = ((winScore * move.getWinProb()) + (tieScore * move.getTieProb()) + (lossScore * move.getLossProb()))
+			
+			tempMove = move.getWinOutcome()
+
+		else:
+
+			score = minmax(nodes, rankSets, firstHQExplored, ALGORITHM_DEPTH, -1000000000, 1000000000)
+			tempMove = move
+
+
 		if bestScore < score:
 			bestScore = score
-			bestMove = move.getMove()
+			bestMove = tempMove
 		
-	return bestMove
+
+	return "( " + tempMove.getMoveFrom + " " + tempMove.getMoveTo + " )" 
 
 #Main minmax algorithm. This function will go to depth levels down a decision tree
 # computing which move tree provides the best outcome
@@ -277,21 +348,30 @@ def minmax(board, rankProbs, hqExplored, depth, maxing, alpha, beta):
 		
 	scores = []
 	
-	for move in getPossibleMoves(board, maxing, rankProbs, hqExplored):
-		if instanceOf(move, Battle):
+	for move in getPossibleMoves(board, rankProbs, maxing, hqExplored):
+		if isinstance(move, Battle):
 			
-			winScore = minmax(move.getWinOutcome().getBoard(), move.getWinOutcome().getRankProbs(), move.getWinOutcome().getHQExplored(), depth - 1, not maxing, alpha, beta)
-			
-			tieScore = minmax(move.getTieOutcome().getBoard(), move.getTieOutcome().getRankProbs(), move.getTieOutcome().getHQExplored(), depth - 1, not maxing, alpha, beta)
-			
-			lossScore = minmax(move.getLossOutcome().getBoard(), move.getLossOutcome().getRankProbs(), move.getLossOutcome().getHQExplored(), depth - 1, not maxing, alpha, beta)
-			
+			if (move.getWinProb() > 0):
+				winScore = minmax(move.getWinOutcome().getBoard(), move.getWinOutcome().getRankProbs(), move.getWinOutcome().getHQExplored(), depth - 1, not maxing, alpha, beta)
+			else:
+				winScore = 0
+
+			if (move.getTieProb() > 0):
+				tieScore = minmax(move.getTieOutcome().getBoard(), move.getTieOutcome().getRankProbs(), move.getTieOutcome().getHQExplored(), depth - 1, not maxing, alpha, beta)
+			else:
+				tieScore = 0
+
+			if (move.getLossProb() > 0):
+				lossScore = minmax(move.getLossOutcome().getBoard(), move.getLossOutcome().getRankProbs(), move.getLossOutcome().getHQExplored(), depth - 1, not maxing, alpha, beta)
+			else:
+				lossScore = 0
+
 			score = ((winScore * move.getWinProb()) + (tieScore * move.getTieProb()) + (lossScore * move.getLossProb()))
 		
 		else:
-		
 			score = minmax(move.getBoard(), move.getRankProbs(), move.getHQExplored(), depth - 1, not maxing, alpha, beta)
 		
+
 		scores.append(score)
 		
 		if(not maxing):
@@ -319,19 +399,19 @@ def minmax(board, rankProbs, hqExplored, depth, maxing, alpha, beta):
 # or if the game has finished.
 def isLeaf(board, hqExplored):
 
-	if hqExplored and instanceOf(board{"D12"}.getPiece, FPiece):
+	if hqExplored and isinstance(board["D12"].getPiece, FPiece):
 		return True
-	elif instanceOf(board{"B1"}.getPiece, EPiece):
+	elif isinstance(board["B1"].getPiece, EPiece):
 		return True
 
 	existsFriendly = False
 	existsEnemy = False
 
 	for node in board:
-		if not existsFriendly and instanceOf(node.getPiece(), FPiece):
+		if not existsFriendly and isinstance(node.getPiece(), FPiece):
 			existsFriendly = True
 
-		if not existsEnemy and instanceOf(node.getPiece(), EPiece):
+		if not existsEnemy and isinstance(node.getPiece(), EPiece):
 			existsEnemy = True
 
 		if existsFriendly and existsEnemy:
@@ -348,14 +428,14 @@ def getPossibleMoves(board, rankProbs, isAI, hqExplored):
 
 	moves = []
 
-	for node in board:
+	for key, node in board.iteritems():
 
 		piece = node.getPiece()
 
 		if piece is not None:
-			if isAI and instanceOf(piece, FPiece): 
+			if isAI and isinstance(piece, FPiece): 
 				moves.extend(getPiecePossibleMoves(node, board, rankProbs, isAI, hqExplored))
-			elif not isAI and instanceOf(piece, EPiece):
+			elif not isAI and isinstance(piece, EPiece):
 				moves.extend(getPiecePossibleMoves(node, board, rankProbs, isAI, hqExplored))
 
 	return moves
@@ -373,25 +453,25 @@ def getPiecePossibleMoves(node, board, rankProbs, isAI, hqExplored):
 
 	outcomes = []
 
-	for connection in node.getConnections:
+	for connection in node.getConnections():
 
 		newBoard = board
 
-		moveToNode = newBoard{connection.getConnectedId()}
-		moveFromNode = newBoard{node.getId()}
+		moveToNode = newBoard[connection.getConnectedId()]
+		moveFromNode = newBoard[node.getId()]
 		moveToPiece = moveToNode.getPiece()
 
-		if moveToNode.getType() == "Camp" and moveToPiece is not None:
+		if moveToNode.getType() == "camp" and moveToPiece is not None:
 			continue
-		elif instanceOf(moveToPiece, FPiece) and isAI:
+		elif isinstance(moveToPiece, FPiece) and isAI:
 			continue
-		elif instanceOf(moveToPiece, EPiece) and not isAI:
+		elif isinstance(moveToPiece, EPiece) and not isAI:
 			continue
 
 		elif moveToPiece is None:
-
-			newBoard{moveToNode.getId()} = moveToNode.setPiece(piece)
-			newBoard{moveFromNode.getId()} = moveFromNode.setPiece(None)
+			sys.stderr.write("MoveFromNodeId is: " + moveFromNode.getId() + "\n")
+			newBoard[moveToNode.getId()] = moveToNode.setPiece(piece)
+			newBoard[moveFromNode.getId()] = moveFromNode.setPiece(None)
 
 			if not hqExplored and moveToNode.getId() == "B12":
 				hqExplored = True
@@ -400,15 +480,16 @@ def getPiecePossibleMoves(node, board, rankProbs, isAI, hqExplored):
 
 		elif moveToPiece is not None:
 
-			outcomes.extend(getPossibleOutcomes(newBoard, moveFromNode, moveToNode, rankProbs, isAI, hqExplored))
+			outcomes.append(getPossibleOutcomes(newBoard, moveFromNode, moveToNode, rankProbs, isAI, hqExplored))
 
+	return outcomes
 
 
 ## Given a board, a node to move from and a node to move to, finds the possible
 # outcomes
 def getPossibleOutcomes(board, moveFromNode, moveToNode, rankProbs, isAI, hqExplored):
 
-	outcomes = []
+	battle = Battle()
 
 	probOfWinning = probOfWinning(moveFromNode.getPiece(), moveToNode.getPiece(), rankProbs)
 	probOfTie = probOfTie(moveFromNode.getPiece(), moveToNode.getPiece(), rankProbs)
@@ -423,8 +504,8 @@ def getPossibleOutcomes(board, moveFromNode, moveToNode, rankProbs, isAI, hqExpl
 		winToNode.setPiece(moveFromNode.getPiece)
 		winFromNode.setPiece(None)
 
-		winBoard{winToNode.getId()} = winToNode
-		winBoard{winFromNode.getId()} = winFromNode
+		winBoard[winToNode.getId()] = winToNode
+		winBoard[winFromNode.getId()] = winFromNode
 
 		##HANDLE UPDATING RANKSETS
 		if isAI:
@@ -437,10 +518,15 @@ def getPossibleOutcomes(board, moveFromNode, moveToNode, rankProbs, isAI, hqExpl
 
 			updateProbabilities(moveFromNode.getPiece(), moveToNode.getPiece(), "win", player, winProbs)
 
-		if not hqExplored and winToNode.getId() == "B12"
+		if (not hqExplored) and (winToNode.getId() == "B12"):
 			hqEplored = True
 
-		outcomes.append(Outcome(winBoard, winProbs, probOfWinning, hqExplored, moveFromNode.getId(), moveToNode.getId()))
+		battle.setWinProb(probOfWinning)
+		battle.setWinOutcome(Outcome(winBoard, winProbs, probOfWinning, hqExplored, moveFromNode.getId(), moveToNode.getId()))
+
+	else:
+		battle.setWinProb(0)
+
 
 	if probOfTie > 0:
 
@@ -451,8 +537,8 @@ def getPossibleOutcomes(board, moveFromNode, moveToNode, rankProbs, isAI, hqExpl
 		tieToNode.setPiece(None)
 		tieFromNode.setPiece(None)
 
-		tieBoard{tieToNode.getId()} = tieToNode
-		tieBoard{tieFromNode.getId()} = tieFromNode
+		tieBoard[tieToNode.getId()] = tieToNode
+		tieBoard[tieFromNode.getId()] = tieFromNode
 
 		##HANDLE UPDATING RANKSETS
 		if isAI:
@@ -466,8 +552,10 @@ def getPossibleOutcomes(board, moveFromNode, moveToNode, rankProbs, isAI, hqExpl
 			updateProbabilities(moveFromNode.getPiece(), moveToNode.getPiece(), "tie", player, tieProbs)
 
 
-
-		outcomes.append(Outcome(tieBoard, tieProbs, probOfTie, hqExplored, moveFromNode.getId(), moveToNode.getId()))
+		battle.setTieProb(probOfTie)
+		battle.setTieOutcome(Outcome(tieBoard, tieProbs, probOfTie, hqExplored, moveFromNode.getId(), moveToNode.getId()))
+	else:
+		battle.setTieProb(0)
 
 	if probOfLosing > 0:
 
@@ -476,8 +564,8 @@ def getPossibleOutcomes(board, moveFromNode, moveToNode, rankProbs, isAI, hqExpl
 		loseFromNode = moveFromNode
 		loseFromNode.setPiece(None)
 
-		loseBoard{loseToNode.getId()} = loseToNode
-		loseBoard{loseFromNode.getId()} = loseFromNode
+		loseBoard[loseToNode.getId()] = loseToNode
+		loseBoard[loseFromNode.getId()] = loseFromNode
 
 		##HANDLE UPDATING RANKSETS
 		if isAI:
@@ -491,15 +579,19 @@ def getPossibleOutcomes(board, moveFromNode, moveToNode, rankProbs, isAI, hqExpl
 			updateProbabilities(moveFromNode.getPiece(), moveToNode.getPiece(), "loss", player, loseProbs)
 
 
-		outcomes.append(Outcome(loseBoard, loseProbs, probOfLose, hqExplored, moveFromNode.getId(), moveToNode.getId()))
 
+		battle.setLossProb(probOfLosing)
+		battle.setLossOutcome(Outcome(loseBoard, loseProbs, probOfLose, hqExplored, moveFromNode.getId(), moveToNode.getId()))
 
-	return outcomes
+	else:
+		battle.setLossProb(0)
+
+	return battle
 
 
 # Analyzes a board configuration and returns a point value in terms of
 # the strength of the AI's position
-def scoreBoard(board, rankProbs, hqExplored)
+def scoreBoard(board, rankProbs, hqExplored):
 	
 	score = 0
 
@@ -579,7 +671,7 @@ def getDistance(start, end):
 
 	ex = getIntVal(end[0])
 
-	return (((ex - sx)**2) + ((ey - sy)**2)**(0.5)
+	return (((ex - sx)**2) + ((ey - sy)**2))**(0.5)
 
 
 
@@ -676,6 +768,7 @@ def jsonToCFG():
 def updateBoard(movingFrom, movingTo, movingPlayer, moveType):
 	
 	global nodes
+	global rankSets
 	
 	# if the ref returns 1 and we need to update our side of the board
 	if int(movingPlayer) == ourPlayer:
@@ -706,7 +799,7 @@ def updateBoard(movingFrom, movingTo, movingPlayer, moveType):
 			setNode.setPiece(fPiece)
 				
 			# update enemy probabilities
-			#updateProbabilities(ePiece, fPiece, moveType, int(movingPlayer))
+			updateProbabilities(ePiece, fPiece, moveType, int(movingPlayer), rankSets)
 			
 		elif moveType == "loss":
 			# set the movingFrom to empty, which should delete our piece.
@@ -720,7 +813,7 @@ def updateBoard(movingFrom, movingTo, movingPlayer, moveType):
 			ePiece = setNode.getPiece()
 
 			# update enemy probabilities
-			#updateProbabilities(ePiece, fPiece, moveType, int(movingPlayer))
+			updateProbabilities(ePiece, fPiece, moveType, int(movingPlayer), rankSets)
 			
 		elif moveType == "tie":
 			# set the movingFrom to empty, which should delete the piece
@@ -734,7 +827,7 @@ def updateBoard(movingFrom, movingTo, movingPlayer, moveType):
 			setNode.setPiece(None)
 					
 			# update enemy probabilities
-			#updateProbabilities(ePiece, fPiece, moveType, int(movingPlayer))
+			updateProbabilities(ePiece, fPiece, moveType, int(movingPlayer), rankSets)
 			
 	else:
 	
@@ -763,7 +856,7 @@ def updateBoard(movingFrom, movingTo, movingPlayer, moveType):
 			setNode.setPiece(ePiece)
 			
 			# update enemy probabilities
-			#updateProbabilities(ePiece, fPiece, moveType, int(movingPlayer))
+			updateProbabilities(ePiece, fPiece, moveType, int(movingPlayer), rankSets)
 			
 		if moveType == "loss":
 			# set the movingFrom to empty, which deletes the enemy piece
@@ -776,7 +869,7 @@ def updateBoard(movingFrom, movingTo, movingPlayer, moveType):
 			fPiece = setNode.getPiece()
 
 			# update enemy probabilities
-			#updateProbabilities(ePiece, fPiece, moveType, int(movingPlayer))
+			updateProbabilities(ePiece, fPiece, moveType, int(movingPlayer), rankSets)
 			
 		elif moveType == "tie":
 			# set the movingTo to empty, which deletes the enemy piece
@@ -790,7 +883,7 @@ def updateBoard(movingFrom, movingTo, movingPlayer, moveType):
 			delNode.setPiece(None)
 
 			# update enemy probabilities
-			#updateProbabilities(ePiece, fPiece, moveType, int(movingPlayer))
+			updateProbabilities(ePiece, fPiece, moveType, int(movingPlayer), rankSets)
 
 #  places piece in the board
 def injectPiece(piece, id):
@@ -1006,20 +1099,7 @@ def placeEnemyPieces():
 	for i, pos in enumerate(positions):
 		nodes[pos].setPiece(EPiece(i))
 
-# calculate our next move
-def calculateMove():
-	global lastMove
-	bestMove = ""
-	piecePositions = getPiecePositions()
-	for pos in piecePositions:
-		# for now pick the best move(based on moving forward, later change to min-max algo) 
-		move = getBestMove(pos)
-		if(move):
-			if(bestMove == "") or moveValue(move[1:3],pos) > moveValue(bestMove[1:3],bestMove[4:6]):
-				bestMove = move
-	if(bestMove != ""):					
-		lastMove = bestMove[1:3]
-		return bestMove	
+
 
 # get the locations of all our pieces
 def getPiecePositions():
@@ -1477,7 +1557,7 @@ def main():
 					
 			# select the next move
 			# (currently brute-force moving one piece till it dies)
-			nextMove = calculateMove()
+			nextMove = getNextMove()
 			
 			# send the ref the move
 			sys.stdout.write(nextMove)
