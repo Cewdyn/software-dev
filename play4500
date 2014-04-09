@@ -294,7 +294,6 @@ class Battle:
 #### Functions ##############################################
 ##############################################################
 
-''' COMMENTED OUT YOUR CODE BECAUSE IT HAS SYNTAX BUGS Q.Q
 
 
 ## Finds the next best move, using minmax
@@ -690,7 +689,7 @@ def getIntVal(xStr):
 		return 4.0
 	else:
 		return 5.0
-'''
+
 
 # syntax checking function
 def syntaxChecker(arguments):
