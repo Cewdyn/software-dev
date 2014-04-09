@@ -768,6 +768,12 @@ def jsonToCFG():
 # updates the board using information parsed from the referree message
 def updateBoard(movingFrom, movingTo, movingPlayer, moveType):
 	
+	# NATE'S DEBUGGING STUFF ----------------------------------------------------
+	
+	# sys.stderr.write("--- BOARD: ourPlayer: " + str(ourPlayer) + ", movingPlayer: " + str(movingPlayer) + "\n")
+	
+	# END NATE'S DEBUGGING STUFF ------------------------------------------------
+	
 	global nodes
 	global rankSets
 	
@@ -897,8 +903,6 @@ def injectPiece(piece, id):
 	node = nodes[piecePos]
 	node.setPiece(FPiece(id, pieceType))
 	nodes[piecePos] = node
-	
-		
 
 # function to debug nate's classes
 def createRankSets():
@@ -1072,6 +1076,12 @@ def probOfTieing(playerPiece, enemyPiece):
 # update probabilities TO-DO
 def updateProbabilities(enemyPiece, playerPiece, moveOutcome, movingPlayer, rankProbs):
 
+	# NATE'S DEBUGGING STUFF ----------------------------------------------------
+	
+	# sys.stderr.write("--- PROBS: ourPlayer: " + str(ourPlayer) + ", movingPlayer: " + str(movingPlayer) + "\n")
+	
+	# END NATE'S DEBUGGING STUFF ------------------------------------------------
+
 	# TO-DO: KNOW IF AN ENGINEER BECAUSE MOVES MORE THAN ONE BOARD SPACE
 	
 	enemyPieceID = enemyPiece.getId()
@@ -1079,7 +1089,7 @@ def updateProbabilities(enemyPiece, playerPiece, moveOutcome, movingPlayer, rank
 	playerPieceType = playerPiece.getType()
 	
 	# convert moveOutcomes to our player's perspective
-	if movingPlayer == 2:
+	if movingPlayer != ourPlayer:
 		if moveOutcome == "win":
 			moveOutcome = "loss"
 		elif moveOutcome == "loss":
@@ -1102,20 +1112,18 @@ def updateProbabilities(enemyPiece, playerPiece, moveOutcome, movingPlayer, rank
 			if key != "L" and key != "B" and key != playerPieceType:
 		 		set.removePossiblePiece(enemyPiece)
 	elif moveOutcome == "win":
-		# remove enemy from all ranks higher than our rank and remove
-		# L/B/F possibility
+		# remove enemy from all ranks higher than our rank and remove L/B/F
 		i = 0
 		for key, set in iter(sorted(rankProbs.iteritems())):
 			if i >= playerPieceTypeInt:
 				# if our piece is an engineer, do not remove possibility enemy was an L
-				if playPieceTypeInt == 1 and i == 11:
+				if playerPieceTypeInt == 1 and i == 11:
 					pass
 				else:
 					set.removePossiblePiece(enemyPiece)
 			i += 1
 	elif moveOutcome == "loss":
-		# remove enemy from all ranks below our rank and remove 
-		# L/B/F possibility
+		# remove enemy from all ranks below our rank and remove L/B/F possibility
 		i = 0
 		for key, set in iter(sorted(rankProbs.iteritems())):
 			if i <= playerPieceTypeInt:
@@ -1125,6 +1133,14 @@ def updateProbabilities(enemyPiece, playerPiece, moveOutcome, movingPlayer, rank
 			i += 1
 				
 	# TO-DO: needs to check and use addDefinitePiece
+	
+	# NATE'S DEBUGGING STUFF ----------------------------------------------------
+	
+	#for key, set in iter(sorted(rankProbs.iteritems())):
+	#	sys.stderr.write("--- P: " + str(ourPlayer) + ", MP: " + str(movingPlayer) + \
+	#		str(set.getPossiblePieces()) + "\n")
+	
+	# END NATE'S DEBUGGING STUFF ------------------------------------------------
 			
 # remove enemy piece IDs from all rank set's possiblePiece if its 
 # discovered elsewhere
@@ -1147,8 +1163,6 @@ def placeEnemyPieces():
 	for i, pos in enumerate(positions):
 		nodes[pos].setPiece(EPiece(i))
 
-
-
 # get the locations of all our pieces
 def getPiecePositions():
 	positions = []
@@ -1163,6 +1177,26 @@ def getPiecePositions():
 				positions.append(key)
 			
 	return positions
+
+
+###############################################################################
+# TYLER'S OLD MOVE FUNCTIONS : TO BE DELETED ----------------------------------
+
+# calculate our next move
+def calculateMove():
+	global lastMove
+	bestMove = ""
+	piecePositions = getPiecePositions()
+	for pos in piecePositions:
+		# for now pick the best move(based on moving forward, later change to min-max algo) 
+		move = getBestMove(pos)
+		if(move):
+			if(bestMove == "") or moveValue(move[1:3],pos) > moveValue(bestMove[1:3],bestMove[4:6]):
+				bestMove = move
+	if(bestMove != ""):					
+		lastMove = bestMove[1:3]
+		return bestMove	
+
 
 # grabs the best move for a given piece
 # (for now just grabs the first valid move)		
@@ -1180,6 +1214,10 @@ def getBestMove(pos):
 					bestMove = move
 	if(bestMove != ""):					
 		return "(" + pos + " " + bestMove + ")"
+
+# END TYLER'S OLD MOVE FUNCTIONS ----------------------------------------------
+###############################################################################
+
 
 # determine if a move is valid (for now means we arn't moving onto 
 # a space occupied by our own piece), and its a move forward, and we aren't attacking a camp.
@@ -1602,10 +1640,16 @@ def main():
 			if (ourPlayer == int(movingPlayer)):
 				sys.stdout.flush()
 				continue
-					
+			
+			# NATE'S DEBUGGING ------------------------------------------------------
+			
+			# sys.exit(0)
+			
+			# END NATE'S DEBUGGING --------------------------------------------------
+			
 			# select the next move
-			# (currently brute-force moving one piece till it dies)
-			nextMove = getNextMove()
+			# nextMove = getNextMove() # USE'S DAN'S HIGHLY ADVANCED ALGO
+			nextMove = calculateMove() # USE'S TYLER'S NEANDERTHAL ALGO
 			
 			# send the ref the move
 			sys.stdout.write(nextMove)
