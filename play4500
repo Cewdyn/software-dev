@@ -10,6 +10,8 @@ import time
 import json
 import pipes
 import tempfile
+import copy
+
 from subprocess import PIPE, Popen
 
 # ----------------------------------------------------
@@ -35,17 +37,10 @@ from subprocess import PIPE, Popen
 #### Global Constants #######################################
 ##############################################################
 
-ALGORITHM_DEPTH = 9
+ALGORITHM_DEPTH = 2
 
 
-##############################################################
-#### Global Variables #######################################
-##############################################################
 
-nodes = {}
-ourPlayer = 0
-lastMove = ""
-firstHQExplored = False
 
 
 
@@ -54,6 +49,112 @@ firstHQExplored = False
 ##############################################################
 
 	
+class Board:
+	def __init__(self, nodes):
+		self.nodes = nodes
+		self.history = []
+		self.age = 0
+
+
+	def __str__(self):
+		results = "Board( Nodes:["
+		
+		for key, node in self.nodes.iteritems():
+			results = results + str(node) + " "
+		
+		results = results + "])"
+		
+		return results	
+
+
+	def getNodes(self):
+		return self.nodes
+
+	def setNodes(self, nodes):
+		self.nodes = nodes
+
+	def getHistory(self):
+		return self.history
+
+	def setHistory(self, history):
+		self.history = history
+
+	def getAge(self):
+		return self.age
+
+	def setAge(self, age):
+		self.age = age
+
+	def getNode(self, nodeId):
+		return self.nodes[nodeId]
+
+	def setNodePiece(self, nodeId, piece):
+
+
+
+		oldNode = self.nodes[nodeId]
+
+		oldPiece = oldNode.getPiece()
+
+		self.history.append({"nodeId":nodeId, "piece":oldPiece})
+
+		oldNode.setPiece(piece)
+
+		self.age = self.age + 1	
+
+
+
+	def undoLastChange(self):
+
+		lastChange = self.history[len(self.history) - 1]
+
+		nodeId = lastChange["nodeId"]
+
+		oldPiece = lastChange["piece"]
+
+		self.getNode(nodeId).setPiece(oldPiece)
+
+		self.age = self.age - 1
+
+
+	def revertToAge(self, age):
+
+
+
+		while age < self.age:
+			self.undoLastChange()
+
+
+	def makeMove(self, frm, to, typ):
+
+		if typ == "move" or typ == "win":
+			fromNode = self.getNode(frm)
+			self.setNodePiece(frm, None)
+			self.setNodePiece(to, fromNode.getPiece())
+		elif typ == "tie":
+			self.setNodePiece(frm, None)
+			self.setNodePiece(to,None)
+		elif typ == "loss":
+			self.setNodePiece(frm, None)
+
+
+	def makeCopy(self):
+
+		newSelf = Board({})
+
+		newThingDict = {}
+
+		for key, val in self.nodes.iteritems():
+			newThingDict[key] = val.makeCopy()
+
+		newSelf.setNodes(newThingDict)
+
+		return newSelf
+
+
+
+
+
 class Node:
 	def __init__(self, id, type, piece, connections):
 		self.id = id
@@ -84,30 +185,33 @@ class Node:
 		
 	def setConnections(self, connections):
 		self.connections = connections
+
+	def makeCopy(self):
+		newSelf = Node(self.id, self.type, self.piece, self.connections)
+
+		return newSelf
+
 	
-	'''	
 	def __repr__(self):
-		results = "Node(Id:" + str(self.id) + " Type:" + self.type + " Piece:"
-		+ str(self.piece) #+ " Connections:["
+		results = "Node(Id:" + str(self.id) + " Type:" + self.type + " Piece:" + str(self.piece) #+ " Connections:["
 		
 		#for conn in self.connections:
 		#	results += str(conn) + " "
 		
-		results += ")"
+		results = results + ")"
 		
 		return results		
 	
 	def __str__(self):
-		results = "Node(Id:" + str(self.id) + " Type:" + self.type + " Piece:"
-		+ str(self.piece) + " Connections:["
+		results = "Node(Id:" + str(self.id) + " Type:" + self.type + " Piece:" + str(self.piece) #+ " Connections:["
 		
-		for conn in self.connections:
-			results += str(conn) + " "
+		#for conn in self.connections:
+		#	results = results + str(conn) + " "
 		
-		results += "])"
+		results = results + ")"
 		
 		return results	
-		'''
+		
 
 class FPiece:
 	def __init__(self, id, type):
@@ -122,6 +226,7 @@ class FPiece:
 	
 	def setType(self, type):
 		self.type = type
+
 
 	def __str__(self):
 		return "FPiece(Id:" + str(self.id) + " Type:" + self.type + ") "		
@@ -152,17 +257,29 @@ class rankSet:
 		
 	def getRank(self):
 		return self.rank
+
+	def setRank(self, rank):
+		self.rank = rank
 	
 	# how many pieces of this rank does the enemy start with?
 	def getAmount(self):
 		return self.amount
+
+	def setAmount(self, amount):
+		self.amount = amount
 		
 	def getPossiblePieces(self):
 		return self.possiblePieces
+
+	def setPossiblePieces(self, possiblePieces):
+		self.possiblePieces = possiblePieces
 		
 	def getDefinitePieces(self):
 		return self.definitePieces
 	
+	def setDefinitePieces(self, definitePieces):
+		self.definitePieces = definitePieces
+
 	def removePossiblePiece(self, piece):
 		self.possiblePieces.remove(piece.getId())
 	
@@ -178,6 +295,13 @@ class rankSet:
 	def purgePossible(self):
 		if len(self.definitePieces) == self.amount:
 			self.possiblePieces = self.definitePieces
+
+	def makeCopy(self):
+		copy = rankSet(self.rank, self.amount)
+		copy.setPossiblePieces(list(self.possiblePieces))
+		copy.setDefinitePieces(list(self.definitePieces))
+
+		return copy
 
 
 class Connection:
@@ -206,23 +330,19 @@ class Connection:
 ## Denotes a possible move outcome. Includes an outcome rankset, board and
 ## the probability of this outcome.
 class Outcome:
-	def __init__(self, board, rankSet, probability, hqExplored, moveFrom, moveTo):
-		self.board = board
+	def __init__(self, rankSet, probability, hqExplored, moveFrom, moveTo):
+
 		self.rankSet = rankSet
 		self.probability = probability
+		self.hqExplored = hqExplored
 		self.moveFrom = moveFrom
 		self.moveTo = moveTo
 
-	def getBoard(self):
-		return self.board
-
-	def setBoard(self, board):
-		self.board = board
 
 	def getRankSet(self):
 		return self.rankSet
 
-	def setRankSEt(self, rankSet):
+	def setRankSet(self, rankSet):
 		self.rankSet = rankSet
 
 	def getProbability(self):
@@ -267,7 +387,7 @@ class Battle:
 		self.winProb = winProb
 
 	def getTieOutcome(self):
-		return self.TieOutcome
+		return self.tieOutcome
 
 	def setTieOutcome(self, tieOutcome):
 		self.tieOutcome = tieOutcome
@@ -290,90 +410,170 @@ class Battle:
 	def setLossProb(self, lossProb):
 		self.lossProb = lossProb
 
+
+##############################################################
+#### Global Variables #######################################
+##############################################################
+
+nodes = Board({})
+ourPlayer = 0
+lastMove = ""
+firstHQExplored = False
+
+
+
+
 ##############################################################
 #### Functions ##############################################
 ##############################################################
+
+## Makes a copy of the either the given rankProbs or the given board
+def makeCopy(thingDict):
+
+	newThingDict = {}
+
+	for key, val in thingDict.iteritems():
+		newThingDict[key] = val.makeCopy()
+
+	return newThingDict
 
 
 
 ## Finds the next best move, using minmax
 def getNextMove():
 	
+	
+
 	bestScore = -1000000000000000
 	
+	global firstHQExplored
 	
-	for move in getPossibleMoves(nodes, rankSets, True, firstHQExplored):
-		
+	moves = getPossibleMoves(nodes, rankSets, True, firstHQExplored)
+
+	board = nodes.makeCopy()
+
+	board.setAge(0)
+
+#	sys.stderr.write("Number of Possible moves: " + str(len(moves)) + "\n")
+
+	for move in moves:
 		if isinstance(move, Battle):
-			
 			if (move.getWinProb() > 0):
-				winScore = minmax(move.getWinOutcome().getBoard(), move.getWinOutcome().getRankProbs(), move.getWinOutcome().getHQExplored(), depth - 1, not maxing, alpha, beta)
+				winOutcome = move.getWinOutcome()
+				board.makeMove(winOutcome.getMoveFrom(), winOutcome.getMoveTo(), "win")
+				
+#				sys.stderr.write("1. Calling MinMax \n")
+				winScore = minmax(board, winOutcome.getRankSet(), winOutcome.getHQExplored(), ALGORITHM_DEPTH - 1, False, -1000000000, 1000000000)
+				board.revertToAge(0)
 			else:
 				winScore = 0
 
 			if (move.getTieProb() > 0):
-				tieScore = minmax(move.getTieOutcome().getBoard(), move.getTieOutcome().getRankProbs(), move.getTieOutcome().getHQExplored(), depth - 1, not maxing, alpha, beta)
+				tieOutcome = move.getTieOutcome()
+				board.makeMove(tieOutcome.getMoveFrom(), tieOutcome.getMoveTo(), "tie")
+				
+#				sys.stderr.write("2. Calling MinMax \n")
+				tieScore = minmax(board, tieOutcome.getRankSet(), tieOutcome.getHQExplored(), ALGORITHM_DEPTH - 1, False, -1000000000, 1000000000)
+				board.revertToAge(0)
 			else:
 				tieScore = 0
 
 			if (move.getLossProb() > 0):
-				lossScore = minmax(move.getLossOutcome().getBoard(), move.getLossOutcome().getRankProbs(), move.getLossOutcome().getHQExplored(), depth - 1, not maxing, alpha, beta)
+				lossOutcome = move.getLossOutcome()
+				board.makeMove(lossOutcome.getMoveFrom(), lossOutcome.getMoveTo(), "loss")
+				
+
+#				sys.stderr.write("3. Calling MinMax \n")
+				lossScore = minmax(board, lossOutcome.getRankSet(), lossOutcome.getHQExplored(), ALGORITHM_DEPTH - 1, False, -1000000000, 1000000000)
+				board.revertToAge(0)
 			else:
 				lossScore = 0
 
 			score = ((winScore * move.getWinProb()) + (tieScore * move.getTieProb()) + (lossScore * move.getLossProb()))
-			
 			tempMove = move.getWinOutcome()
 
 		else:
-
-			score = minmax(nodes, rankSets, firstHQExplored, ALGORITHM_DEPTH, -1000000000, 1000000000)
+			board.makeMove(move.getMoveFrom(), move.getMoveTo(), "move")
+#			sys.stderr.write("4. Calling MinMax \n")
+			score = minmax(board, rankSets, firstHQExplored, ALGORITHM_DEPTH - 1, False, -1000000000, 1000000000)
+			board.revertToAge(0)
 			tempMove = move
 
 
+		sys.stderr.write("Score is: " + str(score) + "\n")	
 		if bestScore < score:
 			bestScore = score
 			bestMove = tempMove
-		
+	
+	sys.stderr.write("Top Score is: " + str(bestScore) + "\n")
 
-	return "( " + tempMove.getMoveFrom + " " + tempMove.getMoveTo + " )" 
+	return "( " + tempMove.getMoveFrom() + " " + tempMove.getMoveTo() + " )" 
 
 #Main minmax algorithm. This function will go to depth levels down a decision tree
 # computing which move tree provides the best outcome
 def minmax(board, rankProbs, hqExplored, depth, maxing, alpha, beta):
 
+	if (depth == 0):
+		sys.stderr.write("Returning due to depth\n")
+
 	if (depth == 0 or isLeaf(board, hqExplored)):
 		
 		return scoreBoard(board, rankProbs, hqExplored)
 		
-	scores = []
+
+	moves = getPossibleMoves(board, rankProbs, maxing, hqExplored)
 	
-	for move in getPossibleMoves(board, rankProbs, maxing, hqExplored):
+	sys.stderr.write("Number of moves is: " + str(len(moves)) + "\n")
+
+	for move in moves:
+	
+		startAge = board.getAge()
+	
 		if isinstance(move, Battle):
-			
 			if (move.getWinProb() > 0):
-				winScore = minmax(move.getWinOutcome().getBoard(), move.getWinOutcome().getRankProbs(), move.getWinOutcome().getHQExplored(), depth - 1, not maxing, alpha, beta)
+				winOutcome = move.getWinOutcome()
+				board.makeMove(winOutcome.getMoveFrom(), winOutcome.getMoveTo(), "win")
+				winScore = minmax(board, winOutcome.getRankSet(), winOutcome.getHQExplored(), depth - 1, not maxing, alpha, beta)
+				board.revertToAge(startAge)
+
 			else:
 				winScore = 0
 
 			if (move.getTieProb() > 0):
-				tieScore = minmax(move.getTieOutcome().getBoard(), move.getTieOutcome().getRankProbs(), move.getTieOutcome().getHQExplored(), depth - 1, not maxing, alpha, beta)
+				tieOutcome = move.getTieOutcome()
+				board.makeMove(tieOutcome.getMoveFrom(), tieOutcome.getMoveTo(), "tie")
+				tieScore = minmax(board, tieOutcome.getRankSet(), tieOutcome.getHQExplored(), depth - 1, not maxing, alpha, beta)
+				board.revertToAge(startAge)
 			else:
 				tieScore = 0
 
 			if (move.getLossProb() > 0):
-				lossScore = minmax(move.getLossOutcome().getBoard(), move.getLossOutcome().getRankProbs(), move.getLossOutcome().getHQExplored(), depth - 1, not maxing, alpha, beta)
+				lossOutcome = move.getLossOutcome()
+				board.makeMove(lossOutcome.getMoveFrom(), lossOutcome.getMoveTo(), "loss")
+				lossScore = minmax(board, lossOutcome.getRankSet(), lossOutcome.getHQExplored(), depth - 1, not maxing, alpha, beta)
+				board.revertToAge(startAge)
 			else:
 				lossScore = 0
 
-			score = ((winScore * move.getWinProb()) + (tieScore * move.getTieProb()) + (lossScore * move.getLossProb()))
-		
-		else:
-			score = minmax(move.getBoard(), move.getRankProbs(), move.getHQExplored(), depth - 1, not maxing, alpha, beta)
-		
 
-		scores.append(score)
-		
+#			sys.stderr.write("Tie Probability is: " + str(move.getTieProb()) + "\n")
+#			sys.stderr.write("Loss Probability is: " + str(move.getLossProb()) + "\n")
+
+#			sys.stderr.write("Win Score is: " + str(winScore) + "\n")
+#			sys.stderr.write("Tie Score is: " + str(tieScore) + "\n")
+#			sys.stderr.write("Loss Score is: " + str(lossScore) + "\n")
+			score = ((winScore * move.getWinProb()) + (tieScore * move.getTieProb()) + (lossScore * move.getLossProb()))
+			
+#			sys.stderr.write("Battle Score is: " + str(score) + "\n")
+		else:
+			board.makeMove(move.getMoveFrom(), move.getMoveTo(), "move")
+			score = minmax(board, move.getRankSet(), move.getHQExplored(), depth - 1, not maxing, alpha, beta)
+			board.revertToAge(startAge)
+
+			
+
+#		sys.stderr.write("MM Score is: " + str(score) + "\n")	
+
 		if(not maxing):
 			if (beta > score):
 				
@@ -389,7 +589,9 @@ def minmax(board, rankProbs, hqExplored, depth, maxing, alpha, beta):
 				
 				if (alpha >= beta):
 					break
-					
+			
+#	sys.stderr.write("Maxing: " + str(maxing) + " Alpha: " + str(alpha) + " Beta: " + str(beta) + "\n")
+
 	if (maxing):
 		return alpha
 	else:
@@ -399,27 +601,32 @@ def minmax(board, rankProbs, hqExplored, depth, maxing, alpha, beta):
 # or if the game has finished.
 def isLeaf(board, hqExplored):
 
-	if hqExplored and isinstance(board["D12"].getPiece, FPiece):
+	if hqExplored and isinstance(board.getNode("D12").getPiece(), FPiece):
+#		sys.stderr.write("Returning 1\n")	
 		return True
-	elif isinstance(board["B1"].getPiece, EPiece):
+	elif isinstance(board.getNode("B1").getPiece(), EPiece):
+#		sys.stderr.write("Returning 2\n")
 		return True
 
 	existsFriendly = False
 	existsEnemy = False
 
-	for node in board:
-		if not existsFriendly and isinstance(node.getPiece(), FPiece):
-			existsFriendly = True
+	'''
+		for key, node in board.getNodes().iteritems():
+			if not existsFriendly and isinstance(node.getPiece(), FPiece):
+				existsFriendly = True
 
-		if not existsEnemy and isinstance(node.getPiece(), EPiece):
-			existsEnemy = True
+			if not existsEnemy and isinstance(node.getPiece(), EPiece):
+				existsEnemy = True
 
-		if existsFriendly and existsEnemy:
-			break
+			if existsFriendly and existsEnemy:
+				break
 
-	if not existsFriendly or not existsEnemy:
-		return True
+		if not existsFriendly or not existsEnemy:
+			sys.stderr.write("Returning 3\n")
+			return True
 
+	'''
 	return False
 
 # Given a board state, it will return an array of all possible moves for
@@ -428,11 +635,16 @@ def getPossibleMoves(board, rankProbs, isAI, hqExplored):
 
 	moves = []
 
-	for key, node in board.iteritems():
+
+
+	
+
+	for key, node in board.getNodes().iteritems():
 
 		piece = node.getPiece()
 
 		if piece is not None:
+			
 			if isAI and isinstance(piece, FPiece): 
 				moves.extend(getPiecePossibleMoves(node, board, rankProbs, isAI, hqExplored))
 			elif not isAI and isinstance(piece, EPiece):
@@ -446,8 +658,7 @@ def getPossibleMoves(board, rankProbs, isAI, hqExplored):
 # the updated rankset
 def getPiecePossibleMoves(node, board, rankProbs, isAI, hqExplored):
 
-	##TO-DO: Find out if modifying the board in this function modifies a new
-	## copy of it, or modifies it in place.
+
 
 	piece = node.getPiece()
 
@@ -455,61 +666,64 @@ def getPiecePossibleMoves(node, board, rankProbs, isAI, hqExplored):
 
 	for connection in node.getConnections():
 
-		newBoard = board
+		shallowMoveToNode = board.getNode(connection.getConnectedId())
+		shallowMoveToPiece = shallowMoveToNode.getPiece()
 
-		moveToNode = newBoard[connection.getConnectedId()]
-		moveFromNode = newBoard[node.getId()]
-		moveToPiece = moveToNode.getPiece()
-
-		if moveToNode.getType() == "camp" and moveToPiece is not None:
+		if shallowMoveToNode.getType() == "camp" and shallowMoveToPiece is not None:
 			continue
-		elif isinstance(moveToPiece, FPiece) and isAI:
+		elif isinstance(shallowMoveToPiece, FPiece) and isAI:
 			continue
-		elif isinstance(moveToPiece, EPiece) and not isAI:
+		elif isinstance(shallowMoveToPiece, EPiece) and not isAI:
 			continue
 
-		elif moveToPiece is None:
-			sys.stderr.write("MoveFromNodeId is: " + moveFromNode.getId() + "\n")
-			newBoard[moveToNode.getId()] = moveToNode.setPiece(piece)
-			newBoard[moveFromNode.getId()] = moveFromNode.setPiece(None)
 
-			if not hqExplored and moveToNode.getId() == "B12":
+		if shallowMoveToPiece is None:
+
+			moveToNode = board.getNode(connection.getConnectedId())
+			moveFromNode = board.getNode(node.getId())
+
+		
+			if not hqExplored and moveToNode.getId() == "B12" and isAI:
 				hqExplored = True
 
-			outcomes.append(Outcome(newBoard, rankProbs, 1, hqExplored, moveFromNode.getId(), moveToNode.getId()))
+			outcomes.append(Outcome(rankProbs, 1, hqExplored, moveFromNode.getId(), moveToNode.getId()))
 
-		elif moveToPiece is not None:
+		elif shallowMoveToPiece is not None:
 
-			outcomes.append(getPossibleOutcomes(newBoard, moveFromNode, moveToNode, rankProbs, isAI, hqExplored))
+			moveToNode = board.getNode(connection.getConnectedId())
+			moveFromNode = board.getNode(node.getId())
+
+			outcomes.append(getPossibleOutcomes(moveFromNode, moveToNode, rankProbs, isAI, hqExplored))
 
 	return outcomes
 
 
 ## Given a board, a node to move from and a node to move to, finds the possible
 # outcomes
-def getPossibleOutcomes(board, moveFromNode, moveToNode, rankProbs, isAI, hqExplored):
+def getPossibleOutcomes(moveFromNode, moveToNode, rankProbs, isAI, hqExplored):
 
 	battle = Battle()
 
-	probOfWinning = probOfWinning(moveFromNode.getPiece(), moveToNode.getPiece(), rankProbs)
-	probOfTie = probOfTie(moveFromNode.getPiece(), moveToNode.getPiece(), rankProbs)
-	probOfLosing = probOfLosing(moveFromNode.getPiece(), moveToNode.getPiece(), rankProbs)
+	if isAI:
+		winProb = probOfWinning(moveFromNode.getPiece(), moveToNode.getPiece(), rankProbs)
+		tieProb = probOfTieing(moveFromNode.getPiece(), moveToNode.getPiece(), rankProbs)
+		lossProb = probOfLosing(moveFromNode.getPiece(), moveToNode.getPiece(), rankProbs)
+	else:
+		winProb = probOfLosing(moveToNode.getPiece(), moveFromNode.getPiece(), rankProbs)
+		tieProb = probOfTieing(moveToNode.getPiece(), moveFromNode.getPiece(), rankProbs)
+		lossProb = probOfWinning(moveToNode.getPiece(), moveFromNode.getPiece(), rankProbs)
+		
 
-	if probOfWinning > 0:
 
-		winBoard = board
-		winToNode = moveToNode
-		winFromNode = moveFromNode
-		winProbs = rankProbs
-		winToNode.setPiece(moveFromNode.getPiece)
-		winFromNode.setPiece(None)
-
-		winBoard[winToNode.getId()] = winToNode
-		winBoard[winFromNode.getId()] = winFromNode
+	if winProb > 0:
+ 
+		
+		winProbs = makeCopy(rankProbs)
+		
 
 		##HANDLE UPDATING RANKSETS
 		if isAI:
-			updateProbabilities(moveFromNode.getPiece(), moveToNode.getPiece(), "win", ourPlayer, winProbs)
+			updateProbabilities(moveToNode.getPiece(), moveFromNode.getPiece(), "win", ourPlayer, winProbs)
 		else:
 			if ourPlayer == 1:
 				player = 2
@@ -518,31 +732,23 @@ def getPossibleOutcomes(board, moveFromNode, moveToNode, rankProbs, isAI, hqExpl
 
 			updateProbabilities(moveFromNode.getPiece(), moveToNode.getPiece(), "win", player, winProbs)
 
-		if (not hqExplored) and (winToNode.getId() == "B12"):
+		if (not hqExplored) and (moveToNode.getId() == "B12"):
 			hqEplored = True
 
-		battle.setWinProb(probOfWinning)
-		battle.setWinOutcome(Outcome(winBoard, winProbs, probOfWinning, hqExplored, moveFromNode.getId(), moveToNode.getId()))
+		battle.setWinProb(winProb)
+		battle.setWinOutcome(Outcome(winProbs, winProb, hqExplored, moveFromNode.getId(), moveToNode.getId()))
 
 	else:
 		battle.setWinProb(0)
 
 
-	if probOfTie > 0:
+	if tieProb > 0:
 
-		tieProbs = rankProbs
-		tieBoard = board
-		tieToNode = moveToNode
-		tieFromNode = moveFromNode
-		tieToNode.setPiece(None)
-		tieFromNode.setPiece(None)
-
-		tieBoard[tieToNode.getId()] = tieToNode
-		tieBoard[tieFromNode.getId()] = tieFromNode
+		tieProbs = makeCopy(rankProbs)
 
 		##HANDLE UPDATING RANKSETS
 		if isAI:
-			updateProbabilities(moveFromNode.getPiece(), moveToNode.getPiece(), "tie", ourPlayer, tieProbs)
+			updateProbabilities(moveToNode.getPiece(), moveFromNode.getPiece(), "tie", ourPlayer, tieProbs)
 		else:
 			if ourPlayer == 1:
 				player = 2
@@ -552,24 +758,21 @@ def getPossibleOutcomes(board, moveFromNode, moveToNode, rankProbs, isAI, hqExpl
 			updateProbabilities(moveFromNode.getPiece(), moveToNode.getPiece(), "tie", player, tieProbs)
 
 
-		battle.setTieProb(probOfTie)
-		battle.setTieOutcome(Outcome(tieBoard, tieProbs, probOfTie, hqExplored, moveFromNode.getId(), moveToNode.getId()))
+		battle.setTieProb(tieProb)
+		
+		battle.setTieOutcome(Outcome(tieProbs, tieProb, hqExplored, moveFromNode.getId(), moveToNode.getId()))
 	else:
 		battle.setTieProb(0)
 
-	if probOfLosing > 0:
+	if lossProb > 0:
 
-		loseBoard = board
-		loseProbs = rankProbs
-		loseFromNode = moveFromNode
-		loseFromNode.setPiece(None)
+		loseProbs = makeCopy(rankProbs)
 
-		loseBoard[loseToNode.getId()] = loseToNode
-		loseBoard[loseFromNode.getId()] = loseFromNode
+		
 
 		##HANDLE UPDATING RANKSETS
 		if isAI:
-			updateProbabilities(moveFromNode.getPiece(), moveToNode.getPiece(), "loss", ourPlayer, loseProbs)
+			updateProbabilities(moveToNode.getPiece(), moveFromNode.getPiece(), "loss", ourPlayer, loseProbs)
 		else:
 			if ourPlayer == 1:
 				player = 2
@@ -580,8 +783,9 @@ def getPossibleOutcomes(board, moveFromNode, moveToNode, rankProbs, isAI, hqExpl
 
 
 
-		battle.setLossProb(probOfLosing)
-		battle.setLossOutcome(Outcome(loseBoard, loseProbs, probOfLose, hqExplored, moveFromNode.getId(), moveToNode.getId()))
+		battle.setLossProb(lossProb)
+		
+		battle.setLossOutcome(Outcome(loseProbs, lossProb, hqExplored, moveFromNode.getId(), moveToNode.getId()))
 
 	else:
 		battle.setLossProb(0)
@@ -595,21 +799,37 @@ def scoreBoard(board, rankProbs, hqExplored):
 	
 	score = 0
 
-	for node in board:
+	for key, node in board.getNodes().iteritems():
 		piece = node.getPiece()
 
-		if isInstance(piece, FPiece):
+		if isinstance(piece, FPiece):
 			score = score + (100 * getTypeValue(piece.getType()))
-		elif isInstance(piece, EPiece):
-			score = score + getEPieceScore(piece, rankProbs)
+		elif isinstance(piece, EPiece):
+			score = score - 1000 #getEPieceScore(piece, rankProbs)
 
 	dist = getDistanceToFlag(board, False, hqExplored)
-	enemyDist = getDistanceToFlag(board, True, False)
+	#enemyDist = getDistanceToFlag(board, True, False)
 
-	score = score - (dist * 900)
-	score = score + (enemyDist * 450)
-
+	score = score - (dist * 100)
+	#score = score + (enemyDist * 450)
 	return score
+
+
+##	Returns a point value number for a piece's type
+def getTypeValue(type):
+
+
+	if type == "B":
+		return 6
+	elif type == "L":
+		return 3
+	elif type == "1":
+		return 3
+	elif type == "F":
+		return 10
+	else:
+		return int(type)
+
 
 # Gets the heuristic score for an EPiece. This is difficult because it has to
 # take into account the probabilities of the piece's type.
@@ -618,7 +838,7 @@ def getEPieceScore(piece, rankProbs):
 	score = 0
 
 	for i in xrange(2, 9):
-		score = score + (probOfType(piece, str(i)) * (i * 100))
+		score = score + (probOfType(piece, str(i), rankProbs) * (i * 100))
 
 	score = score + (probOfType(piece, "1", rankProbs) * 200)
 	score = score + (probOfType(piece, "L", rankProbs) * 300)
@@ -632,44 +852,54 @@ def getEPieceScore(piece, rankProbs):
 def getDistanceToFlag(board, isEnemy, hqExplored):
 	
 	if isEnemy:
-		goal = "B1"
-	elif (hq1Explored):
-		goal = "B12"
+		goal = "A1"
+	elif (not hqExplored):
+		goal = "A12"
 	else: 
-		goal = "D12"
+		goal = "E12"
 
-	result = 100
+	result = 1000
 
-	for node in board:
-		if not isEnemy and isInstance(node.getPiece(), FPiece):
+	for val, node in board.getNodes().iteritems():
+		if not isEnemy and isinstance(node.getPiece(), FPiece):
+#			sys.stderr.write("Running distance formula\n")
 			dist = getDistance(node.getId(), goal)
 			if dist < result:
 				result = dist
-		elif isEnemy and isInstance(node.getPiece(), EPiece):
+		elif isEnemy and isinstance(node.getPiece(), EPiece):
 			dist = getDistance(node.getId(), goal)
 			if dist < result:
 				result = dist
 
-
+	#sys.stderr.write("Result is: " + str(result) + " for isEnemy: " + str(isEnemy) + " and hqExplored: " + str(hqExplored) + "\n")
 	return result
 
 ## Given two positions on the board, a start and an end position, it calculates
 #   the number of steps required to get to that position
 def getDistance(start, end):
-
+	#sys.stderr.write("Start is: " + str(start) + " End is: " + str(end) + "\n")
 	if len(start) > 2:
 		sy = float(start[-2:])
 	else:
 		sy = float(start[1])
 
+
 	sx = getIntVal(start[0])
 	
+	
+	#sys.stderr.write("sy: " + str(sy) + "\n")
+	#sys.stderr.write("sx: " + str(sx) + "\n")
+
 	if len(end) > 2:
 		ey = float(end[-2:])
 	else:
 		ey = float(end[1])
 
 	ex = getIntVal(end[0])
+
+
+	#sys.stderr.write("ey: " + str(ey) + "\n")
+	#sys.stderr.write("ex: " + str(ex) + "\n")
 
 	return (((ex - sx)**2) + ((ey - sy)**2))**(0.5)
 
@@ -784,11 +1014,11 @@ def updateBoard(movingFrom, movingTo, movingPlayer, moveType):
 		#	old position
 		if moveType == "move":
 			
-			delNode = nodes[movingFrom]
+			delNode = nodes.getNode(movingFrom)
 			fPiece = delNode.getPiece()
 			delNode.setPiece(None)
 			
-			setNode = nodes[movingTo]
+			setNode = nodes.getNode(movingTo)
 			setNode.setPiece(fPiece)
 			
 			# TO-DO: call update in case a piece has moved more than one spot & must
@@ -796,12 +1026,12 @@ def updateBoard(movingFrom, movingTo, movingPlayer, moveType):
 			
 		elif moveType == "win":
 			# removes our piece from old location by setting the movingFrom to None	
-			delNode = nodes[movingFrom]
+			delNode = nodes.getNode(movingFrom)
 			fPiece = delNode.getPiece()
 			delNode.setPiece(None)
 			
 			# deletes Enemy piece by setting our piece on the new space
-			setNode = nodes[movingTo]
+			setNode = nodes.getNode(movingTo)
 			ePiece = setNode.getPiece()
 			setNode.setPiece(fPiece)
 				
@@ -811,12 +1041,12 @@ def updateBoard(movingFrom, movingTo, movingPlayer, moveType):
 		elif moveType == "loss":
 			# set the movingFrom to empty, which should delete our piece.
 			# not changing the enemy's piece as it stays in the same spot.
-			delNode = nodes[movingFrom]
+			delNode = nodes.getNode(movingFrom)
 			fPiece = delNode.getPiece()
 			delNode.setPiece(None)
 			
 			# get the enemy piece attacked
-			setNode = nodes[movingTo]
+			setNode = nodes.getNode(movingTo)
 			ePiece = setNode.getPiece()
 
 			# update enemy probabilities
@@ -824,12 +1054,12 @@ def updateBoard(movingFrom, movingTo, movingPlayer, moveType):
 			
 		elif moveType == "tie":
 			# set the movingFrom to empty, which should delete the piece
-			delNode = nodes[movingFrom]
+			delNode = nodes.getNode(movingFrom)
 			fPiece = delNode.getPiece()
 			delNode.setPiece(None)
 			
 			# set the movingTo to empty, which deletes enemy piece
-			setNode = nodes[movingTo]
+			setNode = nodes.getNode(movingTo)
 			ePiece = setNode.getPiece()
 			setNode.setPiece(None)
 					
@@ -840,11 +1070,11 @@ def updateBoard(movingFrom, movingTo, movingPlayer, moveType):
 	
 		if moveType == "move":
 			
-			delNode = nodes[movingFrom]
+			delNode = nodes.getNode(movingFrom)
 			piece = delNode.getPiece()
 			delNode.setPiece(None)
 			
-			setNode = nodes[movingTo]
+			setNode = nodes.getNode(movingTo)
 			setNode.setPiece(piece)
 			
 			# TO-DO: call update in case a piece has moved more than one spot & must
@@ -853,12 +1083,12 @@ def updateBoard(movingFrom, movingTo, movingPlayer, moveType):
 		if moveType == "win":
 			# set the movingTo to empty, which should delete the enemy piece 
 			# from the previous position
-			delNode = nodes[movingFrom]
+			delNode = nodes.getNode(movingFrom)
 			ePiece = delNode.getPiece()
 			delNode.setPiece(None)
 			
 			# place the enemy piece on the movingTo node, deleting our piece	
-			setNode = nodes[movingTo]
+			setNode = nodes.getNode(movingTo)
 			fPiece = setNode.getPiece()
 			setNode.setPiece(ePiece)
 			
@@ -867,12 +1097,12 @@ def updateBoard(movingFrom, movingTo, movingPlayer, moveType):
 			
 		if moveType == "loss":
 			# set the movingFrom to empty, which deletes the enemy piece
-			delNode = nodes[movingFrom]
+			delNode = nodes.getNode(movingFrom)
 			ePiece = delNode.getPiece()
 			delNode.setPiece(None)
 			
 			# get our player's piece
-			setNode = nodes[movingTo]
+			setNode = nodes.getNode(movingTo)
 			fPiece = setNode.getPiece()
 
 			# update enemy probabilities
@@ -880,12 +1110,12 @@ def updateBoard(movingFrom, movingTo, movingPlayer, moveType):
 			
 		elif moveType == "tie":
 			# set the movingTo to empty, which deletes the enemy piece
-			delNode = nodes[movingFrom]
+			delNode = nodes.getNode(movingFrom)
 			ePiece = delNode.getPiece()
 			delNode.setPiece(None)
 					
 			# set the movingFrom to empty, which deletes our piece
-			delNode = nodes[movingTo]
+			delNode = nodes.getNode(movingTo)
 			fPiece = delNode.getPiece()
 			delNode.setPiece(None)
 
@@ -900,9 +1130,8 @@ def injectPiece(piece, id):
 	piecePos = piece["position"]
 	pieceType = piece["piece"]
 	
-	node = nodes[piecePos]
+	node = nodes.getNode(piecePos)
 	node.setPiece(FPiece(id, pieceType))
-	nodes[piecePos] = node
 
 # function to debug nate's classes
 def createRankSets():
@@ -950,28 +1179,32 @@ def createRankSets():
 
 # Given a piece and a type, calculates the probability that the piece is
 # that type
-def probOfType(piece, type, rankProbs):
+def probOfType(piece, typ, rankProbs):
 
-	for key, set in rankProbs.iterItems:
-		if key == type:
+	typeDenom = 0
+
+	for key, set in rankProbs.iteritems():
+		if key == typ:
 			if piece.getId() in set.getPossiblePieces():
 				typeNumer = set.getAmount()
+				typeDenom = typeDenom + set.getAmount()
 			else:
 				return 0;
 		else:
 			if piece.getId() in set.getPossiblePieces():
 				typeDenom = typeDenom + set.getAmount()
 
+
 	return float(typeNumer / typeDenom)
 
 
 # determine the probability of one of our pieces beating one of the enemy's.
 # takes instances of EPiece and FPiece class
-def probOfWinning(playerPiece, enemyPiece):
+def probOfWinning(playerPiece, enemyPiece, rankProbs):
 
-	enemyPieceID = enemyPiece.getId
-	playerPieceID = playerPiece.getId
-	playerPieceType = playerPiece.getType
+	enemyPieceID = enemyPiece.getId()
+	playerPieceID = playerPiece.getId()
+	playerPieceType = playerPiece.getType()
 	
 	# convert rank types to integers for easier looping (INDEXED AT 0)
 	if playerPieceType == "B":
@@ -1001,7 +1234,7 @@ def probOfWinning(playerPiece, enemyPiece):
  	probabilityAgainstCount = 0
 
  	i = 0
- 	for key, set in iter(sorted(rankSets.iteritems())):
+ 	for key, set in iter(sorted(rankProbs.iteritems())):
  		# ranks we will win over
  		if i < playerPieceTypeInt:
 	 		if enemyPieceID in set.getPossiblePieces():
@@ -1027,16 +1260,16 @@ def probOfWinning(playerPiece, enemyPiece):
  	return finalProbability
 
 # get the probability of losing
-def probOfLosing(playerPiece, enemyPiece):
+def probOfLosing(playerPiece, enemyPiece, rankProbs):
 	
-	return 1 - probOfWinning(playerPiece, enemyPiece)
+	return 1 - probOfWinning(playerPiece, enemyPiece, rankProbs)
 	
 # get the probability of tieing
-def probOfTieing(playerPiece, enemyPiece):
+def probOfTieing(playerPiece, enemyPiece, rankProbs):
 
-	enemyPieceID = enemyPiece.getId
-	playerPieceID = playerPiece.getId
-	playerPieceType = playerPiece.getType
+	enemyPieceID = enemyPiece.getId()
+	playerPieceID = playerPiece.getId()
+	playerPieceType = playerPiece.getType()
 	
 	# convert rank types to integers for easier looping (INDEXED AT 0)
 	if playerPieceType == "B":
@@ -1052,7 +1285,7 @@ def probOfTieing(playerPiece, enemyPiece):
 	probabilityNotTieWeighted = 0
 	
 	i = 0
-	for key, set in iter(sorted(rankSets.iteritems())):
+	for key, set in iter(sorted(rankProbs.iteritems())):
 		# an engineer wont tie a landmine
 		if playerPieceTypeInt == 1 and i == 11:
 			rankProbability = float(set.getAmount()) / len(set.getPossiblePieces())
@@ -1084,6 +1317,7 @@ def updateProbabilities(enemyPiece, playerPiece, moveOutcome, movingPlayer, rank
 
 	# TO-DO: KNOW IF AN ENGINEER BECAUSE MOVES MORE THAN ONE BOARD SPACE
 	
+
 	enemyPieceID = enemyPiece.getId()
 	playerPieceID = playerPiece.getId()
 	playerPieceType = playerPiece.getType()
@@ -1109,7 +1343,7 @@ def updateProbabilities(enemyPiece, playerPiece, moveOutcome, movingPlayer, rank
 	if moveOutcome == "tie":
 		# if tie, enemy piece is either of same rank or a bomb or landmine
 		for key, set in rankProbs.iteritems():
-			if key != "L" and key != "B" and key != playerPieceType:
+			if key != "L" and key != "B" and key != playerPieceType and enemyPiece in set.getPossiblePieces():
 		 		set.removePossiblePiece(enemyPiece)
 	elif moveOutcome == "win":
 		# remove enemy from all ranks higher than our rank and remove L/B/F
@@ -1119,16 +1353,16 @@ def updateProbabilities(enemyPiece, playerPiece, moveOutcome, movingPlayer, rank
 				# if our piece is an engineer, do not remove possibility enemy was an L
 				if playerPieceTypeInt == 1 and i == 11:
 					pass
-				else:
+				elif enemyPiece in set.getPossiblePieces():
 					set.removePossiblePiece(enemyPiece)
 			i += 1
 	elif moveOutcome == "loss":
 		# remove enemy from all ranks below our rank and remove L/B/F possibility
 		i = 0
 		for key, set in iter(sorted(rankProbs.iteritems())):
-			if i <= playerPieceTypeInt:
+			if i <= playerPieceTypeInt and enemyPiece in set.getPossiblePieces():
 				set.removePossiblePiece(enemyPiece)
-			elif i > 8:
+			elif i > 8 and enemyPiece in set.getPossiblePieces():
 				set.removePossiblePiece(enemyPiece)
 			i += 1
 				
@@ -1161,7 +1395,7 @@ def placeEnemyPieces():
 	"E11","E12"]
 	
 	for i, pos in enumerate(positions):
-		nodes[pos].setPiece(EPiece(i))
+		nodes.getNode(pos).setPiece(EPiece(i))
 
 # get the locations of all our pieces
 def getPiecePositions():
@@ -1202,7 +1436,7 @@ def calculateMove():
 # (for now just grabs the first valid move)		
 def getBestMove(pos):
 	bestMove = ""
-	node = nodes[pos]
+	node = nodes.getNode(pos)
 	
 	piece = node.getPiece()
 	if not piece.getType() == "L" and not piece.getType() == "F":
@@ -1222,12 +1456,12 @@ def getBestMove(pos):
 # determine if a move is valid (for now means we arn't moving onto 
 # a space occupied by our own piece), and its a move forward, and we aren't attacking a camp.
 def isMoveValid(move, currentPos):
-	if nodes[move].getPiece():
+	if nodes.getNode(move).getPiece():
 		# check if piece is friendly or enemy
-		if isinstance(nodes[move].getPiece(),FPiece):
+		if isinstance(nodes.getNode(move).getPiece(),FPiece):
 			return False
 		#check that we aren't trying to attack piece on a camp
-		elif isinstance(nodes[move].getPiece(),EPiece) and (nodes[move].getType() == "camp"):
+		elif isinstance(nodes.getNode(move).getPiece(),EPiece) and (nodes.getNode(move).getType() == "camp"):
 			return False
 		else:
 			return True
@@ -1243,7 +1477,7 @@ def moveValue(move, pos):
 		value += int(pos[1])
 	else:
 		value = 0
-	if nodes[move].getPiece():
+	if nodes.getNode(move).getPiece():
 		value += 1
 	if move == lastMove:
 		value = 0
@@ -1282,59 +1516,61 @@ def main():
 	# which player are we
 	ourPlayer = int(args[1])
 
+	nodeD = {}
+
 	#A nodes	
-	nodes["A1"] = (Node("A1","standard", None, [Connection("B1", "standard"),
+	nodeD["A1"] = (Node("A1","standard", None, [Connection("B1", "standard"),
 																							Connection("A2", "standard")]))
-	nodes["A2"] = (Node("A2","standard", None, [Connection("A1", "standard"),
+	nodeD["A2"] = (Node("A2","standard", None, [Connection("A1", "standard"),
 																							Connection("B2", "rail"),
 																							Connection("B3","standard"),
 																							Connection("A3","rail")]))
-	nodes["A3"] = (Node("A3","standard", None, [Connection("A2", "rail"),
+	nodeD["A3"] = (Node("A3","standard", None, [Connection("A2", "rail"),
 																							Connection("B3", "standard"),
 																							Connection("A4","rail")]))
-	nodes["A4"] = (Node("A4","standard", None, [Connection("A3", "rail"),
+	nodeD["A4"] = (Node("A4","standard", None, [Connection("A3", "rail"),
 																							Connection("B3", "standard"),
 																							Connection("B4","standard"),
 																							Connection("B5","standard"),
 																							Connection("A5","rail")]))
-	nodes["A5"] = (Node("A5","standard", None, [Connection("A4", "rail"),
+	nodeD["A5"] = (Node("A5","standard", None, [Connection("A4", "rail"),
 																							Connection("B5", "standard"),
 																							Connection("A6","rail")]))
-	nodes["A6"] = (Node("A6","standard", None, [Connection("A5", "rail"),
+	nodeD["A6"] = (Node("A6","standard", None, [Connection("A5", "rail"),
 																							Connection("B5", "standard"),
 																							Connection("B6","rail"),
 																							Connection("A7","rail")]))
-	nodes["A7"] = (Node("A7","standard", None, [Connection("A6", "rail"),
+	nodeD["A7"] = (Node("A7","standard", None, [Connection("A6", "rail"),
 																							Connection("B7", "rail"),
 																							Connection("B8","standard"),
 																							Connection("A8","rail")]))
-	nodes["A8"] = (Node("A8","standard", None, [Connection("A7", "rail"),
+	nodeD["A8"] = (Node("A8","standard", None, [Connection("A7", "rail"),
 																							Connection("B8", "standard"),
 																							Connection("A9","rail")]))
-	nodes["A9"] = (Node("A9","standard", None, [Connection("A8", "rail"),
+	nodeD["A9"] = (Node("A9","standard", None, [Connection("A8", "rail"),
 																							Connection("B8", "standard"),
 																							Connection("B9","standard"),
 																							Connection("B10","standard"),
 																							Connection("A10","rail")]))
-	nodes["A10"] = (Node("A10","standard", None, [Connection("A9", "rail"),
+	nodeD["A10"] = (Node("A10","standard", None, [Connection("A9", "rail"),
 																								Connection("B10", "standard"),
 																								Connection("A11","rail")]))
-	nodes["A11"] = (Node("A11","standard", None, [Connection("A10", "rail"),
+	nodeD["A11"] = (Node("A11","standard", None, [Connection("A10", "rail"),
 																								Connection("B10","standard"),
 																								Connection("B11","rail"),
 																								Connection("A12","standard")]))
-	nodes["A12"] = (Node("A12","standard", None, [Connection("A11", "standard"),
+	nodeD["A12"] = (Node("A12","standard", None, [Connection("A11", "standard"),
 																								Connection("B12","standard")]))
 			
 	#B nodes
-	nodes["B1"] = (Node("B1","HQ", None, [Connection("C1", "standard"),
+	nodeD["B1"] = (Node("B1","HQ", None, [Connection("C1", "standard"),
 																				Connection("B2", "standard"),
 																				Connection("A1", "standard")]))
-	nodes["B2"] = (Node("B2","standard", None, [Connection("B1", "standard"),
+	nodeD["B2"] = (Node("B2","standard", None, [Connection("B1", "standard"),
 																							Connection("C2", "rail"),
 																							Connection("B3","standard"),
 																							Connection("A2","rail")]))
-	nodes["B3"] = (Node("B3","camp", None, [Connection("B2", "standard"),
+	nodeD["B3"] = (Node("B3","camp", None, [Connection("B2", "standard"),
 																					Connection("C2", "standard"),
 																					Connection("C3","standard"),
 																					Connection("C4", "standard"),
@@ -1342,11 +1578,11 @@ def main():
 																					Connection("A4","standard"),
 																					Connection("A3","standard"),
 																					Connection("A2","standard")]))
-	nodes["B4"] = (Node("B4","standard", None, [Connection("B3", "standard"),
+	nodeD["B4"] = (Node("B4","standard", None, [Connection("B3", "standard"),
 																							Connection("C4", "standard"),
 																							Connection("B5","standard"),
 																							Connection("A4","standard")]))
-	nodes["B5"] = (Node("B5","camp", None, [Connection("B4", "standard"),
+	nodeD["B5"] = (Node("B5","camp", None, [Connection("B4", "standard"),
 																					Connection("C4", "standard"),
 																					Connection("C5","standard"),
 																					Connection("C6", "standard"),
@@ -1354,13 +1590,13 @@ def main():
 																					Connection("A6","standard"),
 																					Connection("A5", "standard"),
 																					Connection("A4","standard")]))
-	nodes["B6"] = (Node("B6","standard", None, [Connection("B5", "rail"),
+	nodeD["B6"] = (Node("B6","standard", None, [Connection("B5", "rail"),
 																							Connection("C6", "rail"),
 																							Connection("A6","rail")]))
-	nodes["B7"] = (Node("B7","standard", None, [Connection("C7", "rail"),
+	nodeD["B7"] = (Node("B7","standard", None, [Connection("C7", "rail"),
 																							Connection("B8", "standard"),
 																							Connection("A7","rail")]))
-	nodes["B8"] = (Node("B8","camp", None, [Connection("B7", "standard"),
+	nodeD["B8"] = (Node("B8","camp", None, [Connection("B7", "standard"),
 																					Connection("C7", "standard"),
 																					Connection("C8","standard"),
 																					Connection("C9", "standard"),
@@ -1368,11 +1604,11 @@ def main():
 																					Connection("A9","standard"),
 																					Connection("A8", "standard"),
 																					Connection("A7", "standard")]))
-	nodes["B9"] = (Node("B9","standard", None, [Connection("B8", "standard"),
+	nodeD["B9"] = (Node("B9","standard", None, [Connection("B8", "standard"),
 																							Connection("C9", "standard"),
 																							Connection("B10","standard"),
 																							Connection("A9","standard")]))
-	nodes["B10"] = (Node("B10","camp", None, [Connection("B9", "standard"),
+	nodeD["B10"] = (Node("B10","camp", None, [Connection("B9", "standard"),
 																						Connection("C9", "standard"),
 																						Connection("C10","standard"),
 																						Connection("C11", "standard"),
@@ -1380,29 +1616,29 @@ def main():
 																						Connection("A11","standard"),
 																						Connection("A10", "standard"),
 																						Connection("A9", "standard")]))
-	nodes["B11"] = (Node("B11","standard", None, [Connection("B10", "standard"),
+	nodeD["B11"] = (Node("B11","standard", None, [Connection("B10", "standard"),
 																								Connection("C11","rail"),
 																								Connection("B12","standard"),
 																								Connection("A11","rail")]))
-	nodes["B12"] = (Node("B12","HQ", None, [Connection("B11", "standard"),
+	nodeD["B12"] = (Node("B12","HQ", None, [Connection("B11", "standard"),
 																					Connection("C12","standard"),
 																					Connection("A12","standard")]))
 		
 	#C nodes
-	nodes["C1"] = (Node("C1","standard", None, [Connection("B1", "standard"),
+	nodeD["C1"] = (Node("C1","standard", None, [Connection("B1", "standard"),
 																							Connection("C2", "standard"),
 																							Connection("D1", "standard")]))
-	nodes["C2"] = (Node("C2","standard", None, [Connection("C1", "standard"),
+	nodeD["C2"] = (Node("C2","standard", None, [Connection("C1", "standard"),
 																							Connection("D2", "rail"),
 																							Connection("D3","standard"),
 																							Connection("C3","standard"),
 																							Connection("B3","standard"),
 																							Connection("B2","rail")]))
-	nodes["C3"] = (Node("C3","standard", None, [Connection("C2", "standard"),
+	nodeD["C3"] = (Node("C3","standard", None, [Connection("C2", "standard"),
 																							Connection("D3", "standard"),
 																							Connection("C4","standard"),
 																							Connection("B3", "standard")]))
-	nodes["C4"] = (Node("C4","camp", None, [Connection("C3", "standard"),
+	nodeD["C4"] = (Node("C4","camp", None, [Connection("C3", "standard"),
 																					Connection("D3", "standard"),
 																					Connection("D4","standard"),
 																					Connection("D5","standard"),
@@ -1410,27 +1646,27 @@ def main():
 																					Connection("B5", "standard"),
 																					Connection("B4","standard"),
 																					Connection("B3","standard")]))
-	nodes["C5"] = (Node("C5","standard", None, [Connection("C4", "standard"),
+	nodeD["C5"] = (Node("C5","standard", None, [Connection("C4", "standard"),
 																							Connection("D5", "standard"),
 																							Connection("C6","standard"),
 																							Connection("B5", "standard")]))
-	nodes["C6"] = (Node("C6","standard", None, [Connection("C5", "standard"),
+	nodeD["C6"] = (Node("C6","standard", None, [Connection("C5", "standard"),
 																							Connection("D5", "standard"),
 																							Connection("D6","rail"),
 																							Connection("C7", "rail"),
 																							Connection("B6", "rail"),
 																							Connection("B5","standard")]))
-	nodes["C7"] = (Node("C7","standard", None, [Connection("C6", "rail"),
+	nodeD["C7"] = (Node("C7","standard", None, [Connection("C6", "rail"),
 																							Connection("D7", "rail"),
 																							Connection("D8","standard"),
 																							Connection("C8","standard"),
 																							Connection("B8","standard"),
 																							Connection("B7","standard")]))
-	nodes["C8"] = (Node("C8","standard", None, [Connection("C7", "standard"),
+	nodeD["C8"] = (Node("C8","standard", None, [Connection("C7", "standard"),
 																							Connection("D8", "standard"),
 																							Connection("C9","standard"),
 																							Connection("C8", "standard")]))
-	nodes["C9"] = (Node("C9","camp", None, [Connection("C8", "standard"),
+	nodeD["C9"] = (Node("C9","camp", None, [Connection("C8", "standard"),
 																					Connection("D8", "standard"),
 																					Connection("D9","standard"),
 																					Connection("D10","standard"),
@@ -1438,29 +1674,29 @@ def main():
 																					Connection("B10", "standard"),
 																					Connection("B9","standard"),
 																					Connection("B8","standard")]))
-	nodes["C10"] = (Node("C10","standard", None, [Connection("C9", "standard"),
+	nodeD["C10"] = (Node("C10","standard", None, [Connection("C9", "standard"),
 																							Connection("D10", "standard"),
 																							Connection("C11","standard"),
 																							Connection("B10", "standard")]))
-	nodes["C11"] = (Node("C11","standard", None, [Connection("C10", "standard"),
+	nodeD["C11"] = (Node("C11","standard", None, [Connection("C10", "standard"),
 																								Connection("D10","standard"),
 																								Connection("D11","rail"),
 																								Connection("C12","standard"),
 																								Connection("B11","rail"),
 																								Connection("B10","standard")]))
-	nodes["C12"] = (Node("C12","standard", None, [Connection("C11", "standard"),
+	nodeD["C12"] = (Node("C12","standard", None, [Connection("C11", "standard"),
 																								Connection("D12","standard"),
 																								Connection("B12","standard")]))
 
 	#D nodes
-	nodes["D1"] = (Node("D1","HQ", None, [Connection("E1", "standard"),
+	nodeD["D1"] = (Node("D1","HQ", None, [Connection("E1", "standard"),
 																				Connection("D2", "standard"),
 																				Connection("C1", "standard")]))
-	nodes["D2"] = (Node("D2","standard", None, [Connection("D1", "standard"),
+	nodeD["D2"] = (Node("D2","standard", None, [Connection("D1", "standard"),
 																							Connection("E2", "rail"),
 																							Connection("D3","standard"),
 																							Connection("C2","rail")]))
-	nodes["D3"] = (Node("D3","camp", None, [Connection("D2", "standard"),
+	nodeD["D3"] = (Node("D3","camp", None, [Connection("D2", "standard"),
 																					Connection("E2", "standard"),
 																					Connection("E3","standard"),
 																					Connection("E4", "standard"),
@@ -1468,11 +1704,11 @@ def main():
 																					Connection("C4","standard"),
 																					Connection("C3","standard"),
 																					Connection("C2","standard")]))
-	nodes["D4"] = (Node("D4","standard", None, [Connection("D3", "standard"),
+	nodeD["D4"] = (Node("D4","standard", None, [Connection("D3", "standard"),
 																							Connection("E4", "standard"),
 																							Connection("D5","standard"),
 																							Connection("C4","standard")]))
-	nodes["D5"] = (Node("D5","camp", None, [Connection("D4", "standard"),
+	nodeD["D5"] = (Node("D5","camp", None, [Connection("D4", "standard"),
 																					Connection("E4", "standard"),
 																					Connection("E5","standard"),
 																					Connection("E6", "standard"),
@@ -1480,13 +1716,13 @@ def main():
 																					Connection("C6","standard"),
 																					Connection("C5", "standard"),
 																					Connection("C4","standard")]))
-	nodes["D6"] = (Node("D6","standard", None, [Connection("D5", "rail"),
+	nodeD["D6"] = (Node("D6","standard", None, [Connection("D5", "rail"),
 																							Connection("E6", "rail"),
 																							Connection("C6","rail")]))
-	nodes["D7"] = (Node("D7","standard", None, [Connection("E7", "rail"),
+	nodeD["D7"] = (Node("D7","standard", None, [Connection("E7", "rail"),
 																							Connection("D8", "standard"),
 																							Connection("C7","rail")]))
-	nodes["D8"] = (Node("D8","camp", None, [Connection("D7", "standard"),
+	nodeD["D8"] = (Node("D8","camp", None, [Connection("D7", "standard"),
 																					Connection("E7", "standard"),
 																					Connection("E8","standard"),
 																					Connection("E9", "standard"),
@@ -1494,11 +1730,11 @@ def main():
 																					Connection("C9","standard"),
 																					Connection("C8", "standard"),
 																					Connection("C7", "standard")]))
-	nodes["D9"] = (Node("D9","standard", None, [Connection("D8", "standard"),
+	nodeD["D9"] = (Node("D9","standard", None, [Connection("D8", "standard"),
 																							Connection("E9", "standard"),
 																							Connection("D10","standard"),
 																							Connection("C9","standard")]))
-	nodes["D10"] = (Node("D10","camp", None, [Connection("D9", "standard"),
+	nodeD["D10"] = (Node("D10","camp", None, [Connection("D9", "standard"),
 																						Connection("E9", "standard"),
 																						Connection("E10","standard"),
 																						Connection("E11", "standard"),
@@ -1506,58 +1742,60 @@ def main():
 																						Connection("C11","standard"),
 																						Connection("C10", "standard"),
 																						Connection("C9", "standard")]))
-	nodes["D11"] = (Node("D11","standard", None, [Connection("D10", "standard"),
+	nodeD["D11"] = (Node("D11","standard", None, [Connection("D10", "standard"),
 																								Connection("E11","rail"),
 																								Connection("D12","standard"),
 																								Connection("C11","rail")]))
-	nodes["D12"] = (Node("D12","HQ", None, [Connection("D11", "standard"),
+	nodeD["D12"] = (Node("D12","HQ", None, [Connection("D11", "standard"),
 																					Connection("E12","standard"),
 																					Connection("C12","standard")]))
 
 	#E nodes	
-	nodes["E1"] = (Node("E1","standard", None, [Connection("D1", "standard"),
+	nodeD["E1"] = (Node("E1","standard", None, [Connection("D1", "standard"),
 																							Connection("E2", "standard")]))
-	nodes["E2"] = (Node("E2","standard", None, [Connection("E1", "standard"),
+	nodeD["E2"] = (Node("E2","standard", None, [Connection("E1", "standard"),
 																							Connection("E3", "rail"),
 																							Connection("D3","standard"),
 																							Connection("D2","rail")]))
-	nodes["E3"] = (Node("E3","standard", None, [Connection("E2", "rail"),
+	nodeD["E3"] = (Node("E3","standard", None, [Connection("E2", "rail"),
 																							Connection("D3", "standard"),
 																							Connection("E4","rail")]))
-	nodes["E4"] = (Node("E4","standard", None, [Connection("E3", "rail"),
+	nodeD["E4"] = (Node("E4","standard", None, [Connection("E3", "rail"),
 																							Connection("E5", "rail"),
 																							Connection("D5","standard"),
 																							Connection("D4","standard"),
 																							Connection("D3","standard")]))
-	nodes["E5"] = (Node("E5","standard", None, [Connection("E4", "rail"),
+	nodeD["E5"] = (Node("E5","standard", None, [Connection("E4", "rail"),
 																							Connection("D5", "standard"),
 																							Connection("E6","rail")]))
-	nodes["E6"] = (Node("E6","standard", None, [Connection("E5", "rail"),
+	nodeD["E6"] = (Node("E6","standard", None, [Connection("E5", "rail"),
 																							Connection("D5", "standard"),
 																							Connection("D6","rail"),
 																							Connection("E7","rail")]))
-	nodes["E7"] = (Node("E7","standard", None, [Connection("E6", "rail"),
+	nodeD["E7"] = (Node("E7","standard", None, [Connection("E6", "rail"),
 																							Connection("D7", "rail"),
 																							Connection("D8","standard"),
 																							Connection("E8","rail")]))
-	nodes["E8"] = (Node("E8","standard", None, [Connection("E7", "rail"),
+	nodeD["E8"] = (Node("E8","standard", None, [Connection("E7", "rail"),
 																							Connection("D8", "standard"),
 																							Connection("E9","rail")]))
-	nodes["E9"] = (Node("E9","standard", None, [Connection("E8", "rail"),
+	nodeD["E9"] = (Node("E9","standard", None, [Connection("E8", "rail"),
 																							Connection("D8", "standard"),
 																							Connection("D9","standard"),
 																							Connection("D10","standard"),
 																							Connection("E10","rail")]))
-	nodes["E10"] = (Node("E10","standard", None, [Connection("E9", "rail"),
+	nodeD["E10"] = (Node("E10","standard", None, [Connection("E9", "rail"),
 																								Connection("D10", "standard"),
 																								Connection("E11","rail")]))
-	nodes["E11"] = (Node("E11","standard", None, [Connection("E10", "rail"),
+	nodeD["E11"] = (Node("E11","standard", None, [Connection("E10", "rail"),
 																								Connection("D10","standard"),
 																								Connection("D11","rail"),
 																								Connection("E12","standard")]))
-	nodes["E12"] = (Node("E12","standard", None, [Connection("E11", "standard"),
+	nodeD["E12"] = (Node("E12","standard", None, [Connection("E11", "standard"),
 																								Connection("D12","standard")]))
 	
+	nodes.setNodes(nodeD)
+
 	# open our json that has our initial configuration
 	initConfig = open("initConfig.json")
 	initConfigArray = json.load(initConfig)
@@ -1648,8 +1886,8 @@ def main():
 			# END NATE'S DEBUGGING --------------------------------------------------
 			
 			# select the next move
-			# nextMove = getNextMove() # USE'S DAN'S HIGHLY ADVANCED ALGO
-			nextMove = calculateMove() # USE'S TYLER'S NEANDERTHAL ALGO
+			nextMove = getNextMove() # USE'S DAN'S HIGHLY ADVANCED ALGO
+			# nextMove = calculateMove() # USE'S TYLER'S NEANDERTHAL ALGO
 			
 			# send the ref the move
 			sys.stdout.write(nextMove)
