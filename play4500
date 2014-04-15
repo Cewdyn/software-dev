@@ -90,12 +90,9 @@ class Board:
 
 	def setNodePiece(self, nodeId, piece):
 
-
-
-		oldNode = self.nodes[nodeId]
+		oldNode = self.getNode(nodeId)
 
 		oldPiece = oldNode.getPiece()
-
 		self.history.append({"nodeId":nodeId, "piece":oldPiece})
 
 		oldNode.setPiece(piece)
@@ -106,11 +103,12 @@ class Board:
 
 	def undoLastChange(self):
 
-		lastChange = self.history[len(self.history) - 1]
+		lastChange = self.history.pop()
 
 		nodeId = lastChange["nodeId"]
 
 		oldPiece = lastChange["piece"]
+
 
 		self.getNode(nodeId).setPiece(oldPiece)
 
@@ -118,8 +116,6 @@ class Board:
 
 
 	def revertToAge(self, age):
-
-
 
 		while age < self.age:
 			self.undoLastChange()
@@ -129,11 +125,11 @@ class Board:
 
 		if typ == "move" or typ == "win":
 			fromNode = self.getNode(frm)
-			self.setNodePiece(frm, None)
 			self.setNodePiece(to, fromNode.getPiece())
+			self.setNodePiece(frm, None)
 		elif typ == "tie":
 			self.setNodePiece(frm, None)
-			self.setNodePiece(to,None)
+			self.setNodePiece(to, None)
 		elif typ == "loss":
 			self.setNodePiece(frm, None)
 
@@ -151,28 +147,32 @@ class Board:
 
 		return newSelf
 
+	def __str__(self):
+
+		return "Board( Age: " + str(self.age) + " History: " + str(self.history) + " Nodes: " + str(self.nodes) + " )\n"
+
 
 
 
 
 class Node:
-	def __init__(self, id, type, piece, connections):
-		self.id = id
-		self.type = type
+	def __init__(self, ID, typ, piece, connections):
+		self.id = ID
+		self.typ = typ
 		self.piece = piece
 		self.connections = connections
 	  
 	def getId(self):
 		return self.id
 		
-	def setId(self, id):
-		self.id = id
+	def setId(self, ID):
+		self.id = ID
 		
 	def getType(self):
-		return self.type
+		return self.typ
 		
-	def setType(self, type):
-		self.type = type
+	def setType(self, typ):
+		self.typ = typ
 		
 	def getPiece(self):
 		return self.piece
@@ -187,13 +187,13 @@ class Node:
 		self.connections = connections
 
 	def makeCopy(self):
-		newSelf = Node(self.id, self.type, self.piece, self.connections)
+		newSelf = Node(self.id, self.typ, self.piece, self.connections)
 
 		return newSelf
 
 	
 	def __repr__(self):
-		results = "Node(Id:" + str(self.id) + " Type:" + self.type + " Piece:" + str(self.piece) #+ " Connections:["
+		results = "Node(Id:" + str(self.id) + " Type:" + self.typ + " Piece:" + str(self.piece) #+ " Connections:["
 		
 		#for conn in self.connections:
 		#	results += str(conn) + " "
@@ -203,7 +203,7 @@ class Node:
 		return results		
 	
 	def __str__(self):
-		results = "Node(Id:" + str(self.id) + " Type:" + self.type + " Piece:" + str(self.piece) #+ " Connections:["
+		results = "Node(Id:" + str(self.id) + " Type:" + self.typ + " Piece:" + str(self.piece) #+ " Connections:["
 		
 		#for conn in self.connections:
 		#	results = results + str(conn) + " "
@@ -214,33 +214,33 @@ class Node:
 		
 
 class FPiece:
-	def __init__(self, id, type):
-		self.id = id
-		self.type = type
+	def __init__(self, ID, typ):
+		self.id = ID
+		self.typ = typ
 		
 	def getId(self):
 		return self.id
 		
 	def getType(self):
-		return self.type
+		return self.typ
 	
-	def setType(self, type):
-		self.type = type
+	def setType(self, typ):
+		self.typ = typ
 
 
 	def __str__(self):
-		return "FPiece(Id:" + str(self.id) + " Type:" + self.type + ") "		
+		return "FPiece(Id:" + str(self.id) + " Type:" + str(self.typ) + ") "		
 
 # Class which represents an Enemy Piece		
 class EPiece:
-	def __init__(self, id):
-		self.id = id
+	def __init__(self, ID):
+		self.ID = ID
 		
 	def getId(self):
-		return self.id
+		return self.ID
 		
 	def __str__(self):
-		return "EPiece(Id: " + str(self.id) + ") "
+		return "EPiece(Id: " + str(self.ID) + ") "
 		
 # class to represent a set of possible pieces belonging to rank
 class rankSet:
@@ -456,6 +456,7 @@ def getNextMove():
 
 #	sys.stderr.write("Number of Possible moves: " + str(len(moves)) + "\n")
 
+
 	for move in moves:
 		if isinstance(move, Battle):
 			if (move.getWinProb() > 0):
@@ -465,6 +466,8 @@ def getNextMove():
 #				sys.stderr.write("1. Calling MinMax \n")
 				winScore = minmax(board, winOutcome.getRankSet(), winOutcome.getHQExplored(), ALGORITHM_DEPTH - 1, False, -1000000000, 1000000000)
 				board.revertToAge(0)
+
+				tempMove = move.getWinOutcome()
 			else:
 				winScore = 0
 
@@ -475,6 +478,8 @@ def getNextMove():
 #				sys.stderr.write("2. Calling MinMax \n")
 				tieScore = minmax(board, tieOutcome.getRankSet(), tieOutcome.getHQExplored(), ALGORITHM_DEPTH - 1, False, -1000000000, 1000000000)
 				board.revertToAge(0)
+
+				tempMove = move.getTieOutcome()
 			else:
 				tieScore = 0
 
@@ -486,35 +491,45 @@ def getNextMove():
 #				sys.stderr.write("3. Calling MinMax \n")
 				lossScore = minmax(board, lossOutcome.getRankSet(), lossOutcome.getHQExplored(), ALGORITHM_DEPTH - 1, False, -1000000000, 1000000000)
 				board.revertToAge(0)
+
+				tempMove = move.getLossOutcome()
 			else:
 				lossScore = 0
 
 			score = ((winScore * move.getWinProb()) + (tieScore * move.getTieProb()) + (lossScore * move.getLossProb()))
-			tempMove = move.getWinOutcome()
+
+			
 
 		else:
 			board.makeMove(move.getMoveFrom(), move.getMoveTo(), "move")
-#			sys.stderr.write("4. Calling MinMax \n")
+			#sys.stderr.write("4. Calling MinMax \n")
 			score = minmax(board, rankSets, firstHQExplored, ALGORITHM_DEPTH - 1, False, -1000000000, 1000000000)
 			board.revertToAge(0)
 			tempMove = move
 
+		#sys.stderr.write("Score is: " + str(score) + "\n")
+		#sys.stderr.write("Move is: (  " + tempMove.getMoveFrom() + " " + tempMove.getMoveTo() + " )\n")
 
-		sys.stderr.write("Score is: " + str(score) + "\n")	
 		if bestScore < score:
 			bestScore = score
 			bestMove = tempMove
 	
-	sys.stderr.write("Top Score is: " + str(bestScore) + "\n")
 
-	return "( " + tempMove.getMoveFrom() + " " + tempMove.getMoveTo() + " )" 
+	#sys.stderr.write("BestScore is: " + str(score) + "\n")
+	#sys.stderr.write("Move is: (  " + tempMove.getMoveFrom() + " " + tempMove.getMoveTo() + " )\n")
+	#sys.stderr.write("Piece is: " + str(board.getNode(tempMove.getMoveFrom()).getPiece()) + "\n")
+
+	printBoard(board)
+	if len(moves) == 0:
+		return "( )"
+
+	return "( " + bestMove.getMoveFrom() + " " + bestMove.getMoveTo() + " )" 
 
 #Main minmax algorithm. This function will go to depth levels down a decision tree
 # computing which move tree provides the best outcome
 def minmax(board, rankProbs, hqExplored, depth, maxing, alpha, beta):
 
-	if (depth == 0):
-		sys.stderr.write("Returning due to depth\n")
+
 
 	if (depth == 0 or isLeaf(board, hqExplored)):
 		
@@ -523,13 +538,15 @@ def minmax(board, rankProbs, hqExplored, depth, maxing, alpha, beta):
 
 	moves = getPossibleMoves(board, rankProbs, maxing, hqExplored)
 	
-	sys.stderr.write("Number of moves is: " + str(len(moves)) + "\n")
 
 	for move in moves:
 	
 		startAge = board.getAge()
 	
 		if isinstance(move, Battle):
+
+
+
 			if (move.getWinProb() > 0):
 				winOutcome = move.getWinOutcome()
 				board.makeMove(winOutcome.getMoveFrom(), winOutcome.getMoveTo(), "win")
@@ -570,6 +587,7 @@ def minmax(board, rankProbs, hqExplored, depth, maxing, alpha, beta):
 			score = minmax(board, move.getRankSet(), move.getHQExplored(), depth - 1, not maxing, alpha, beta)
 			board.revertToAge(startAge)
 
+
 			
 
 #		sys.stderr.write("MM Score is: " + str(score) + "\n")	
@@ -579,16 +597,16 @@ def minmax(board, rankProbs, hqExplored, depth, maxing, alpha, beta):
 				
 				beta = score
 				
-				if (alpha >= beta):
-					break
+			if (alpha >= beta):
+				break
 	
 		else:
 			if (alpha < score):
 				
 				alpha = score
 				
-				if (alpha >= beta):
-					break
+			if (alpha >= beta):
+				break
 			
 #	sys.stderr.write("Maxing: " + str(maxing) + " Alpha: " + str(alpha) + " Beta: " + str(beta) + "\n")
 
@@ -611,22 +629,22 @@ def isLeaf(board, hqExplored):
 	existsFriendly = False
 	existsEnemy = False
 
-	'''
-		for key, node in board.getNodes().iteritems():
-			if not existsFriendly and isinstance(node.getPiece(), FPiece):
-				existsFriendly = True
+	
+	for key, node in board.getNodes().iteritems():
+		if not existsFriendly and isinstance(node.getPiece(), FPiece):
+			existsFriendly = True
 
-			if not existsEnemy and isinstance(node.getPiece(), EPiece):
-				existsEnemy = True
+		if not existsEnemy and isinstance(node.getPiece(), EPiece):
+			existsEnemy = True
 
-			if existsFriendly and existsEnemy:
-				break
+		if existsFriendly and existsEnemy:
+			break
 
-		if not existsFriendly or not existsEnemy:
-			sys.stderr.write("Returning 3\n")
-			return True
+	if not existsFriendly or not existsEnemy:
+		sys.stderr.write("Returning 3\n")
+		return True
 
-	'''
+	
 	return False
 
 # Given a board state, it will return an array of all possible moves for
@@ -635,20 +653,19 @@ def getPossibleMoves(board, rankProbs, isAI, hqExplored):
 
 	moves = []
 
-
-
-	
+	pieceCount = 0
 
 	for key, node in board.getNodes().iteritems():
 
 		piece = node.getPiece()
 
 		if piece is not None:
-			
-			if isAI and isinstance(piece, FPiece): 
+			pieceCount = pieceCount + 1
+			if isAI and isinstance(piece, FPiece) and not piece.getType() == "L": #and not piece.getType() == "B":
 				moves.extend(getPiecePossibleMoves(node, board, rankProbs, isAI, hqExplored))
 			elif not isAI and isinstance(piece, EPiece):
 				moves.extend(getPiecePossibleMoves(node, board, rankProbs, isAI, hqExplored))
+
 
 	return moves
 
@@ -666,32 +683,33 @@ def getPiecePossibleMoves(node, board, rankProbs, isAI, hqExplored):
 
 	for connection in node.getConnections():
 
-		shallowMoveToNode = board.getNode(connection.getConnectedId())
-		shallowMoveToPiece = shallowMoveToNode.getPiece()
 
-		if shallowMoveToNode.getType() == "camp" and shallowMoveToPiece is not None:
+		moveToNode = board.getNode(connection.getConnectedId())
+		moveToPiece = moveToNode.getPiece()
+		moveFromNode = board.getNode(node.getId())	
+
+		if moveToNode.getType() == "camp" and moveToPiece is not None:
 			continue
-		elif isinstance(shallowMoveToPiece, FPiece) and isAI:
+		elif isinstance(moveToPiece, FPiece) and isAI:
 			continue
-		elif isinstance(shallowMoveToPiece, EPiece) and not isAI:
+		elif isinstance(moveToPiece, EPiece) and not isAI:
+			continue
+		elif moveFromNode.getId() == "B1" or moveFromNode.getId() == "D1":
+			continue
+		elif moveFromNode.getId() == "B12" or moveFromNode.getId() == "D12":
 			continue
 
+		if moveToPiece is None:
 
-		if shallowMoveToPiece is None:
-
-			moveToNode = board.getNode(connection.getConnectedId())
-			moveFromNode = board.getNode(node.getId())
-
-		
 			if not hqExplored and moveToNode.getId() == "B12" and isAI:
 				hqExplored = True
 
 			outcomes.append(Outcome(rankProbs, 1, hqExplored, moveFromNode.getId(), moveToNode.getId()))
 
-		elif shallowMoveToPiece is not None:
+		else:
 
-			moveToNode = board.getNode(connection.getConnectedId())
-			moveFromNode = board.getNode(node.getId())
+			if not hqExplored and moveToNode.getId() == "B12" and isAI:
+				hqExplored = True
 
 			outcomes.append(getPossibleOutcomes(moveFromNode, moveToNode, rankProbs, isAI, hqExplored))
 
@@ -707,12 +725,11 @@ def getPossibleOutcomes(moveFromNode, moveToNode, rankProbs, isAI, hqExplored):
 	if isAI:
 		winProb = probOfWinning(moveFromNode.getPiece(), moveToNode.getPiece(), rankProbs)
 		tieProb = probOfTieing(moveFromNode.getPiece(), moveToNode.getPiece(), rankProbs)
-		lossProb = probOfLosing(moveFromNode.getPiece(), moveToNode.getPiece(), rankProbs)
+		lossProb = 1.0 - winProb
 	else:
 		winProb = probOfLosing(moveToNode.getPiece(), moveFromNode.getPiece(), rankProbs)
 		tieProb = probOfTieing(moveToNode.getPiece(), moveFromNode.getPiece(), rankProbs)
-		lossProb = probOfWinning(moveToNode.getPiece(), moveFromNode.getPiece(), rankProbs)
-		
+		lossProb = 1.0 - winProb
 
 
 	if winProb > 0:
@@ -739,7 +756,28 @@ def getPossibleOutcomes(moveFromNode, moveToNode, rankProbs, isAI, hqExplored):
 		battle.setWinOutcome(Outcome(winProbs, winProb, hqExplored, moveFromNode.getId(), moveToNode.getId()))
 
 	else:
-		battle.setWinProb(0)
+		winProb = 0.2
+
+		winProbs = makeCopy(rankProbs)
+		
+
+		##HANDLE UPDATING RANKSETS
+		if isAI:
+			updateProbabilities(moveToNode.getPiece(), moveFromNode.getPiece(), "win", ourPlayer, winProbs)
+		else:
+			if ourPlayer == 1:
+				player = 2
+			else:
+				player = 1
+
+			updateProbabilities(moveFromNode.getPiece(), moveToNode.getPiece(), "win", player, winProbs)
+
+		if (not hqExplored) and (moveToNode.getId() == "B12"):
+			hqEplored = True
+
+		battle.setWinProb(winProb)
+		battle.setWinOutcome(Outcome(winProbs, winProb, hqExplored, moveFromNode.getId(), moveToNode.getId()))
+
 
 
 	if tieProb > 0:
@@ -798,37 +836,46 @@ def getPossibleOutcomes(moveFromNode, moveToNode, rankProbs, isAI, hqExplored):
 def scoreBoard(board, rankProbs, hqExplored):
 	
 	score = 0
-
+	
 	for key, node in board.getNodes().iteritems():
 		piece = node.getPiece()
 
 		if isinstance(piece, FPiece):
 			score = score + (100 * getTypeValue(piece.getType()))
 		elif isinstance(piece, EPiece):
-			score = score - 1000 #getEPieceScore(piece, rankProbs)
-
+			score = score - 900 #getEPieceScore(piece, rankProbs)
+	
 	dist = getDistanceToFlag(board, False, hqExplored)
 	#enemyDist = getDistanceToFlag(board, True, False)
+	if hqExplored:
+		goal = "D12"
+	else:
+		goal = "B12"
 
-	score = score - (dist * 100)
-	#score = score + (enemyDist * 450)
+	if(isinstance(board.getNode(goal).getPiece(), FPiece)):
+		score = score + 100000
+
+
+	
+	score = score - (dist * 1800)
+	#score = score + (enemyDist * 900)
 	return score
 
 
 ##	Returns a point value number for a piece's type
-def getTypeValue(type):
+def getTypeValue(typ):
 
 
-	if type == "B":
+	if typ == "B":
 		return 6
-	elif type == "L":
+	elif typ == "L":
 		return 3
-	elif type == "1":
+	elif typ == "1":
 		return 3
-	elif type == "F":
+	elif typ == "F":
 		return 10
 	else:
-		return int(type)
+		return int(typ)
 
 
 # Gets the heuristic score for an EPiece. This is difficult because it has to
@@ -852,24 +899,23 @@ def getEPieceScore(piece, rankProbs):
 def getDistanceToFlag(board, isEnemy, hqExplored):
 	
 	if isEnemy:
-		goal = "A1"
+		goal = "B1"
 	elif (not hqExplored):
-		goal = "A12"
+		goal = "B12"
 	else: 
-		goal = "E12"
+		goal = "D12"
 
-	result = 1000
+	result = 0
 
 	for val, node in board.getNodes().iteritems():
 		if not isEnemy and isinstance(node.getPiece(), FPiece):
 #			sys.stderr.write("Running distance formula\n")
 			dist = getDistance(node.getId(), goal)
-			if dist < result:
-				result = dist
+			result = result + dist
 		elif isEnemy and isinstance(node.getPiece(), EPiece):
 			dist = getDistance(node.getId(), goal)
-			if dist < result:
-				result = dist
+			result = result + dist
+
 
 	#sys.stderr.write("Result is: " + str(result) + " for isEnemy: " + str(isEnemy) + " and hqExplored: " + str(hqExplored) + "\n")
 	return result
@@ -981,7 +1027,7 @@ def getTimeLimit(timeString):
 	
 # take a JSON initial configuration and convert to the specification's CFG
 def jsonToCFG():
-
+	
 	# open our own initial configuration
 	initConfig = open("initConfig.json")
 	test = json.load(initConfig)
@@ -1123,7 +1169,7 @@ def updateBoard(movingFrom, movingTo, movingPlayer, moveType):
 			updateProbabilities(ePiece, fPiece, moveType, int(movingPlayer), rankSets)
 
 #  places piece in the board
-def injectPiece(piece, id):
+def injectPiece(piece, ID):
 	
 	global nodes
 	
@@ -1131,7 +1177,7 @@ def injectPiece(piece, id):
 	pieceType = piece["piece"]
 	
 	node = nodes.getNode(piecePos)
-	node.setPiece(FPiece(id, pieceType))
+	node.setPiece(FPiece(ID, pieceType))
 
 # function to debug nate's classes
 def createRankSets():
@@ -1208,13 +1254,13 @@ def probOfWinning(playerPiece, enemyPiece, rankProbs):
 	
 	# convert rank types to integers for easier looping (INDEXED AT 0)
 	if playerPieceType == "B":
-		playerPieceTypeInt = 9
+		playerPieceTypeInt = 9.0
 	elif playerPieceType == "F":
-		playerPieceTypeInt = 10
+		playerPieceTypeInt = 10.0
 	elif playerPieceType == "L":
-		playerPieceTypeInt = 11
+		playerPieceTypeInt = 11.0
 	else:
-		playerPieceTypeInt = int(playerPieceType) - 1 
+		playerPieceTypeInt = float(playerPieceType) - 1.0
 	
 	# TO-DO: getDefinitePieces is not currently in use
 	# check if this enemy piece's rank has already been discovered
@@ -1224,38 +1270,39 @@ def probOfWinning(playerPiece, enemyPiece, rankProbs):
  	# 		return 1
  	
 	# probability of losing
- 	probabilityAgainstWeighted = 0
+ 	probabilityAgainstWeighted = 0.0
  	
  	# probability of winning
- 	probabilityForWeighted = 0
+ 	probabilityForWeighted = 0.0
  	
  	# currently unused, but may be useful for future probability metrics
-	probabilityForCount = 0
- 	probabilityAgainstCount = 0
+	probabilityForCount = 0.0
+ 	probabilityAgainstCount = 0.0
 
- 	i = 0
+ 	i = 0.0
  	for key, set in iter(sorted(rankProbs.iteritems())):
  		# ranks we will win over
  		if i < playerPieceTypeInt:
 	 		if enemyPieceID in set.getPossiblePieces():
-	 			rankProbability = float(set.getAmount()) / len(set.getPossiblePieces())
+	 			rankProbability = float(set.getAmount()) / float(len(set.getPossiblePieces()))
 	 			probabilityForWeighted += rankProbability
-	 			probabilityForCount += 1
+	 			probabilityForCount += 1.0
 	 	# ranks we will lose or tie to 
 	 	else:
 	 		if enemyPieceID in set.getPossiblePieces():
 	 			# don't consider flags in the list of pieces that could defeat us
-	 			if i != 10:
-	 				rankProbability = float(set.getAmount()) / len(set.getPossiblePieces())
+	 			if i != 10.0:
+	 				rankProbability = float(set.getAmount()) / float(len(set.getPossiblePieces()))
 	 				probabilityAgainstWeighted += rankProbability
-	 				probabilityAgainstCount += 1
-	 	i += 1
+	 				probabilityAgainstCount += 1.0
+	 	i += 1.0
 	
 	# get the total amount of weight
 	totalProbabilityWeight = probabilityForWeighted + probabilityAgainstWeighted
 
 	# the prob of winning is the favorable probability divided by total weight 
 	finalProbability = probabilityForWeighted / totalProbabilityWeight
+
 	
  	return finalProbability
 
@@ -1273,29 +1320,29 @@ def probOfTieing(playerPiece, enemyPiece, rankProbs):
 	
 	# convert rank types to integers for easier looping (INDEXED AT 0)
 	if playerPieceType == "B":
-		playerPieceTypeInt = 9
+		playerPieceTypeInt = 9.0
 	elif playerPieceType == "F":
-		playerPieceTypeInt = 10
+		playerPieceTypeInt = 10.0
 	elif playerPieceType == "L":
-		playerPieceTypeInt = 11
+		playerPieceTypeInt = 11.0
 	else:
-		playerPieceTypeInt = int(playerPieceType) - 1 
+		playerPieceTypeInt = int(playerPieceType) - 1.0 
 		
-	probabilityTieWeighted = 0
-	probabilityNotTieWeighted = 0
+	probabilityTieWeighted = 0.0
+	probabilityNotTieWeighted = 0.0
 	
-	i = 0
+	i = 0.0
 	for key, set in iter(sorted(rankProbs.iteritems())):
 		# an engineer wont tie a landmine
-		if playerPieceTypeInt == 1 and i == 11:
-			rankProbability = float(set.getAmount()) / len(set.getPossiblePieces())
+		if playerPieceTypeInt == 1.0 and i == 11.0:
+			rankProbability = float(set.getAmount()) / float(len(set.getPossiblePieces()))
 			probabilityNotTieWeighted += rankProbability
 		# ranks that can tie are the same rank, a bomb or landmine 
-		elif i == playerPieceTypeInt or i == 9 or i == 11:
-			rankProbability = float(set.getAmount()) / len(set.getPossiblePieces())
+		elif i == playerPieceTypeInt or i == 9.0 or i == 11.0:
+			rankProbability = float(set.getAmount()) / float(len(set.getPossiblePieces()))
 			probabilityTieWeighted += rankProbability
 		else:
-			rankProbability = float(set.getAmount()) / len(set.getPossiblePieces())
+			rankProbability = float(set.getAmount()) / float(len(set.getPossiblePieces()))
 			probabilityNotTieWeighted += rankProbability
 	
 	# get the total probability weight
@@ -1304,6 +1351,7 @@ def probOfTieing(playerPiece, enemyPiece, rankProbs):
 	# the prob of tieing is the prob of a tie divided by total weight
 	finalProbability = probabilityTieWeighted / totalProbabilityWeight
 	
+
 	return finalProbability
 			
 # update probabilities TO-DO
@@ -1332,13 +1380,13 @@ def updateProbabilities(enemyPiece, playerPiece, moveOutcome, movingPlayer, rank
 	# convert rank types to integers for easier looping
 	# note: INDEXED AT 0
 	if playerPieceType == "B":
-		playerPieceTypeInt = 9
+		playerPieceTypeInt = 9.0
 	elif playerPieceType == "F":
-		playerPieceTypeInt = 10
+		playerPieceTypeInt = 10.0
 	elif playerPieceType == "L":
-		playerPieceTypeInt = 11
+		playerPieceTypeInt = 11.0
 	else:
-		playerPieceTypeInt = int(playerPieceType) - 1 
+		playerPieceTypeInt = float(playerPieceType) - 1.0 
 	
 	if moveOutcome == "tie":
 		# if tie, enemy piece is either of same rank or a bomb or landmine
@@ -1347,24 +1395,24 @@ def updateProbabilities(enemyPiece, playerPiece, moveOutcome, movingPlayer, rank
 		 		set.removePossiblePiece(enemyPiece)
 	elif moveOutcome == "win":
 		# remove enemy from all ranks higher than our rank and remove L/B/F
-		i = 0
+		i = 0.0
 		for key, set in iter(sorted(rankProbs.iteritems())):
 			if i >= playerPieceTypeInt:
 				# if our piece is an engineer, do not remove possibility enemy was an L
-				if playerPieceTypeInt == 1 and i == 11:
+				if playerPieceTypeInt == 1.0 and i == 11.0:
 					pass
 				elif enemyPiece in set.getPossiblePieces():
 					set.removePossiblePiece(enemyPiece)
-			i += 1
+			i += 1.0
 	elif moveOutcome == "loss":
 		# remove enemy from all ranks below our rank and remove L/B/F possibility
-		i = 0
+		i = 0.0
 		for key, set in iter(sorted(rankProbs.iteritems())):
 			if i <= playerPieceTypeInt and enemyPiece in set.getPossiblePieces():
 				set.removePossiblePiece(enemyPiece)
-			elif i > 8 and enemyPiece in set.getPossiblePieces():
+			elif i > 8.0 and enemyPiece in set.getPossiblePieces():
 				set.removePossiblePiece(enemyPiece)
-			i += 1
+			i += 1.0
 				
 	# TO-DO: needs to check and use addDefinitePiece
 	
@@ -1411,6 +1459,73 @@ def getPiecePositions():
 				positions.append(key)
 			
 	return positions
+
+#Makes a node string for the printboard function
+def strNo(node):
+
+	piece = node.getPiece()
+
+	if piece is None:
+		pieceStr = "-(-)"
+	else:
+		if isinstance(piece, FPiece):
+			typ = "F"
+			pieceStr = typ + "(" + piece.getType() + ")"
+		else:
+			typ = "E"
+			pieceStr = typ + "(" + "?" + ")"
+		
+
+	if len(node.getId()) < 3:
+		nodeId = node.getId()[0] + " " + node.getId()[1]
+	else:
+		nodeId = node.getId()
+
+	result = "(" + nodeId + ":" + pieceStr + ")"
+
+	return result
+
+#Prints out a pretty version of the board
+def printBoard(board):
+
+	sys.stderr.write("Board( \n")
+	sys.stderr.write("     Age: " + str(board.getAge()) + "\n\n")
+
+	nodes = board.getNodes()
+
+	sys.stderr.write(strNo(nodes["A12"]) + " - " + strNo(nodes["B12"]) + " - "
+	+ strNo(nodes["C12"]) + " - " + strNo(nodes["D12"]) + " - " 
+	+ strNo(nodes["E12"]) + "\n\n")
+	sys.stderr.write("    |     " + "     " + "     |    " + "     " 
+	+ "     |    " + "     " + "     |    " + "     " + "     |    " + "\n\n")
+	sys.stderr.write(strNo(nodes["A11"]) + " - " + strNo(nodes["B11"]) + " - "
+	+ strNo(nodes["C11"]) + " - " + strNo(nodes["D11"]) + " - " 
+	+ strNo(nodes["E11"]) + "\n\n")
+	sys.stderr.write("    |     " + "  \  " + "     |    " + "  /  " 
+	+ "     |    " + "  \  " + "     |    " + "  /  " + "     |    " + "\n\n")	
+	sys.stderr.write(strNo(nodes["A10"]) + " - " + strNo(nodes["B10"]) + " - " 
+	+ strNo(nodes["C10"]) + " - " + strNo(nodes["D10"]) + " - " 
+	+ strNo(nodes["E10"]) + "\n\n")
+	sys.stderr.write("     |    " + "  /  " + "     |    " + "  \  " + "     |    " + "  /  " + "     |    " + "  \  " + "     |    " + "\n\n")
+	sys.stderr.write(strNo(nodes["A9"]) + " - " + strNo(nodes["B9"]) + " - " + strNo(nodes["C9"]) + " - " + strNo(nodes["D9"]) + " - " + strNo(nodes["E9"]) + "\n\n")
+	sys.stderr.write("     |    " + "  \  " + "     |    " + "  /  " + "     |    " + "  \  " + "     |    " + "  /  " + "     |    " + "\n\n")	
+	sys.stderr.write(strNo(nodes["A8"]) + " - " + strNo(nodes["B8"]) + " - " + strNo(nodes["C8"]) + " - " + strNo(nodes["D8"]) + " - " + strNo(nodes["E8"]) + "\n\n")
+	sys.stderr.write("     |    " + "  /  " + "     |    " + "  \  " + "     |    " + "  /  " + "     |    " + "  \  " + "     |    " + "\n\n")
+	sys.stderr.write(strNo(nodes["A7"]) + " - " + strNo(nodes["B7"]) + " - " + strNo(nodes["C7"]) + " - " + strNo(nodes["D7"]) + " - " + strNo(nodes["E7"]) + "\n\n")
+	sys.stderr.write("     |    " + "     " + "     |    " + "     " + "     |    " + "     " + "     |    " + "     " + "     |    " + "\n\n")	
+	sys.stderr.write(strNo(nodes["A6"]) + " - " + strNo(nodes["B6"]) + " - " + strNo(nodes["C6"]) + " - " + strNo(nodes["D6"]) + " - " + strNo(nodes["E6"]) + "\n\n")
+	sys.stderr.write("     |    " + "  \  " + "     |    " + "  /  " + "     |    " + "  \  " + "     |    " + "  /  " + "     |    " + "\n\n")
+	sys.stderr.write(strNo(nodes["A5"]) + " - " + strNo(nodes["B5"]) + " - " + strNo(nodes["C5"]) + " - " + strNo(nodes["D5"]) + " - " + strNo(nodes["E5"]) + "\n\n")
+	sys.stderr.write("     |    " + "  /  " + "     |    " + "  \  " + "     |    " + "  /  " + "     |    " + "  \  " + "     |    " + "\n\n")	
+	sys.stderr.write(strNo(nodes["A4"]) + " - " + strNo(nodes["B4"]) + " - " + strNo(nodes["C4"]) + " - " + strNo(nodes["D4"]) + " - " + strNo(nodes["E4"]) + "\n\n")
+	sys.stderr.write("     |    " + "  \  " + "     |    " + "  /  " + "     |    " + "  \  " + "     |    " + "  /  " + "     |    " + "\n\n")
+	sys.stderr.write(strNo(nodes["A3"]) + " - " + strNo(nodes["B3"]) + " - " + strNo(nodes["C3"]) + " - " + strNo(nodes["D3"]) + " - " + strNo(nodes["E3"]) + "\n\n")
+	sys.stderr.write("     |    " + "  /  " + "     |    " + "  \  " + "     |    " + "  /  " + "     |    " + "  \  " + "     |    " + "\n\n")	
+	sys.stderr.write(strNo(nodes["A2"]) + " - " + strNo(nodes["B2"]) + " - " + strNo(nodes["C2"]) + " - " + strNo(nodes["D2"]) + " - " + strNo(nodes["E2"]) + "\n\n")
+	sys.stderr.write("     |    " + "     " + "     |    " + "     " + "     |    " + "     " + "     |    " + "     " + "     |    " + "\n\n")
+	sys.stderr.write(strNo(nodes["A1"]) + " - " + strNo(nodes["B1"]) + " - " + strNo(nodes["C1"]) + " - " + strNo(nodes["D1"]) + " - " + strNo(nodes["E1"]) + "\n\n")
+
+	sys.stderr.write(")\n")
 
 
 ###############################################################################
