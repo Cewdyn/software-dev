@@ -1,1 +1,7 @@
-/course/cs4500sp14/Assignments/A8/ref4500
+#!/bin/sh
+
+PROGRAM=/course/cs4500sp14/Assignments/A10/ref4500.fasl
+#PROGRAM=ref4500.fasl
+#PROGRAM=ref4500.sch
+
+larceny --nobanner -- $PROGRAM 4500 $@
